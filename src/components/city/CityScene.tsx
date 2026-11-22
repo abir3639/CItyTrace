@@ -1,13 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { Compass, Layers, MousePointerClick } from "lucide-react";
-import type { InfraCase } from "@/types/citytrace";
-import { getStatusStyle } from "@/utils/formatters";
+import type { MapFeature } from "@/types/citytrace";
+import { TONES, mapFeatureTone } from "@/utils/formatters";
+
+/* ------------------------------------------------------------------ */
+/* Procedural district geometry                                        */
+/* ------------------------------------------------------------------ */
 
 interface BuildingSpec {
   id: string;
@@ -20,7 +24,7 @@ interface BuildingSpec {
   edgeGlow: boolean;
 }
 
-// 26 low-poly Dhaka Sector 04 structures positioned around arterial roads & storm canal
+/** Low-poly Dhaka Sector 04 structures arranged around the arterial grid. */
 const DHAKA_BUILDINGS: BuildingSpec[] = [
   { id: "b1", x: -4.2, z: -0.9, w: 1.4, h: 1.9, d: 1.3, tone: "secondary", edgeGlow: false },
   { id: "b2", x: -4.1, z: -3.2, w: 1.5, h: 2.8, d: 1.4, tone: "primary", edgeGlow: true },
@@ -67,30 +71,17 @@ function LowPolyBuilding({ b }: { b: BuildingSpec }) {
     return edges;
   }, [b.w, b.h, b.d]);
 
-  useEffect(() => {
-    return () => {
-      edgesGeo.dispose();
-    };
-  }, [edgesGeo]);
+  useEffect(() => () => edgesGeo.dispose(), [edgesGeo]);
 
   const fillColor =
-    b.tone === "civic"
-      ? "#132944"
-      : b.tone === "primary"
-        ? "#0e2038"
-        : "#0a1729";
-
+    b.tone === "civic" ? "#132944" : b.tone === "primary" ? "#0e2038" : "#0a1729";
   const roofColor = b.edgeGlow ? "#173c5e" : "#11243c";
 
   return (
     <group position={[b.x, b.h / 2, b.z]}>
       <mesh>
         <boxGeometry args={[b.w, b.h, b.d]} />
-        <meshStandardMaterial
-          color={fillColor}
-          roughness={0.78}
-          metalness={0.22}
-        />
+        <meshStandardMaterial color={fillColor} roughness={0.78} metalness={0.22} />
       </mesh>
 
       <mesh position={[0, b.h / 2 + 0.04, 0]}>
@@ -126,11 +117,7 @@ function StreetlightCorridor() {
           </mesh>
           <mesh position={[-0.14, 1.24, 0]}>
             <boxGeometry args={[0.28, 0.05, 0.07]} />
-            <meshStandardMaterial
-              color="#34d399"
-              emissive="#10b981"
-              emissiveIntensity={1.6}
-            />
+            <meshStandardMaterial color="#34d399" emissive="#10b981" emissiveIntensity={1.6} />
           </mesh>
         </group>
       ))}
@@ -165,45 +152,37 @@ function DhakaRoadsAndCanal() {
         <meshBasicMaterial color="#0891b2" transparent opacity={0.45} />
       </mesh>
       {dashPositionsX.map((dx, i) => (
-        <mesh
-          key={`dash-x-${i}`}
-          rotation={[-Math.PI / 2, 0, 0]}
-          position={[dx, 0.012, 1.2]}
-        >
+        <mesh key={`dash-x-${i}`} rotation={[-Math.PI / 2, 0, 0]} position={[dx, 0.012, 1.2]}>
           <planeGeometry args={[0.72, 0.06]} />
           <meshBasicMaterial color="#38bdf8" transparent opacity={0.55} />
         </mesh>
       ))}
 
-      {/* North-South Main Arterial (x = -1.5) */}
+      {/* North-South Main Arterial */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[-1.5, 0.006, 0]}>
         <planeGeometry args={[1.65, 17.5]} />
         <meshStandardMaterial color="#0b1525" roughness={0.85} />
       </mesh>
       {dashPositionsZ.map((dz, i) => (
-        <mesh
-          key={`dash-z-${i}`}
-          rotation={[-Math.PI / 2, 0, 0]}
-          position={[-1.5, 0.013, dz]}
-        >
+        <mesh key={`dash-z-${i}`} rotation={[-Math.PI / 2, 0, 0]} position={[-1.5, 0.013, dz]}>
           <planeGeometry args={[0.06, 0.72]} />
           <meshBasicMaterial color="#38bdf8" transparent opacity={0.55} />
         </mesh>
       ))}
 
-      {/* East Civic Boulevard (x = 5.4) */}
+      {/* East Civic Boulevard */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[5.4, 0.006, 0]}>
         <planeGeometry args={[1.35, 17.5]} />
         <meshStandardMaterial color="#0b1525" roughness={0.85} />
       </mesh>
 
-      {/* Main Arterial Intersection Pad */}
+      {/* Intersection pad */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[-1.5, 0.009, 1.2]}>
         <planeGeometry args={[1.9, 1.9]} />
         <meshStandardMaterial color="#101f36" roughness={0.8} />
       </mesh>
 
-      {/* Western Storm Canal (x = -6.2) */}
+      {/* Western storm canal */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[-6.2, 0.002, 0]}>
         <planeGeometry args={[1.55, 18]} />
         <meshStandardMaterial
@@ -229,20 +208,26 @@ function DhakaRoadsAndCanal() {
   );
 }
 
-function InfrastructureMarker({
-  item,
+/* ------------------------------------------------------------------ */
+/* Markers                                                             */
+/* ------------------------------------------------------------------ */
+
+function FeatureMarker({
+  feature,
   isSelected,
   onSelect,
+  onHover,
 }: {
-  item: InfraCase;
+  feature: MapFeature;
   isSelected: boolean;
   onSelect: (id: string) => void;
+  onHover: (id: string | null) => void;
 }) {
   const [hovered, setHovered] = useState(false);
   const pulseRef = useRef<THREE.Mesh | null>(null);
   const beaconRef = useRef<THREE.Mesh | null>(null);
-  const statusStyle = getStatusStyle(item.status);
-  const [x, , z] = item.coordinates;
+  const hex = TONES[mapFeatureTone(feature.state)].hex;
+  const [x, , z] = [feature.coordinates[0], 0, feature.coordinates[1]];
 
   useEffect(() => {
     document.body.style.cursor = hovered ? "pointer" : "auto";
@@ -266,37 +251,29 @@ function InfrastructureMarker({
   return (
     <group position={[x, 0, z]}>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.03, 0]}>
-        <circleGeometry args={[0.55, 24]} />
+        <circleGeometry args={[0.5, 24]} />
+        <meshBasicMaterial color={hex} transparent opacity={isSelected ? 0.42 : 0.2} />
+      </mesh>
+
+      <mesh ref={pulseRef} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.04, 0]}>
+        <ringGeometry args={[0.52, 0.66, 24]} />
         <meshBasicMaterial
-          color={statusStyle.hex}
+          color={isSelected ? "#22d3ee" : hex}
           transparent
-          opacity={isSelected ? 0.42 : 0.24}
+          opacity={isSelected ? 0.9 : 0.6}
         />
       </mesh>
 
-      <mesh
-        ref={pulseRef}
-        rotation={[-Math.PI / 2, 0, 0]}
-        position={[0, 0.04, 0]}
-      >
-        <ringGeometry args={[0.62, 0.78, 28]} />
-        <meshBasicMaterial
-          color={isSelected ? "#22d3ee" : statusStyle.hex}
-          transparent
-          opacity={isSelected ? 0.9 : 0.65}
-        />
-      </mesh>
-
-      <mesh position={[0, 0.85, 0]}>
-        <cylinderGeometry args={[0.045, 0.045, 1.55, 8]} />
-        <meshBasicMaterial color={statusStyle.hex} transparent opacity={0.85} />
+      <mesh position={[0, 0.8, 0]}>
+        <cylinderGeometry args={[0.04, 0.04, 1.45, 8]} />
+        <meshBasicMaterial color={hex} transparent opacity={0.8} />
       </mesh>
 
       <mesh ref={beaconRef} position={[0, 1.65, 0]}>
-        <octahedronGeometry args={[isSelected || hovered ? 0.4 : 0.34, 0]} />
+        <octahedronGeometry args={[isSelected || hovered ? 0.34 : 0.28, 0]} />
         <meshStandardMaterial
-          color={statusStyle.hex}
-          emissive={statusStyle.hex}
+          color={hex}
+          emissive={hex}
           emissiveIntensity={isSelected || hovered ? 1.5 : 1.05}
           roughness={0.25}
           metalness={0.2}
@@ -304,78 +281,87 @@ function InfrastructureMarker({
       </mesh>
 
       <mesh
-        position={[0, 1.35, 0]}
-        onClick={(e) => {
-          e.stopPropagation();
-          onSelect(item.id);
+        position={[0, 1.2, 0]}
+        onClick={(event) => {
+          event.stopPropagation();
+          onSelect(feature.id);
         }}
-        onPointerOver={(e) => {
-          e.stopPropagation();
+        onPointerOver={(event) => {
+          event.stopPropagation();
           setHovered(true);
+          onHover(feature.id);
         }}
-        onPointerOut={() => setHovered(false)}
+        onPointerOut={() => {
+          setHovered(false);
+          onHover(null);
+        }}
       >
-        <sphereGeometry args={[1.05, 12, 12]} />
+        <sphereGeometry args={[0.9, 10, 10]} />
         <meshBasicMaterial transparent opacity={0} depthWrite={false} />
       </mesh>
     </group>
   );
 }
 
-/**
- * Projects 3D marker anchors into 2D screen coordinates for crisp React 19 DOM overlays
- * without mounting nested React roots inside R3F.
- */
+/* eslint-disable react-hooks/immutability -- this projector is the imperative R3F frame loop that writes label positions straight onto projected DOM nodes */
+/** Projects 3D anchors into screen space for crisp DOM labels. */
 function MarkerProjector({
-  cases,
+  features,
+  activeId,
   markerDomRefs,
 }: {
-  cases: InfraCase[];
+  features: MapFeature[];
+  activeId: string | null;
   markerDomRefs: React.MutableRefObject<Record<string, HTMLButtonElement | null>>;
 }) {
   const { camera, size } = useThree();
   const projected = useMemo(() => new THREE.Vector3(), []);
 
   useFrame(() => {
-    for (const item of cases) {
-      const el = markerDomRefs.current[item.id];
+    for (const feature of features) {
+      const el = markerDomRefs.current[feature.id];
       if (!el) continue;
 
-      projected.set(item.coordinates[0], 2.55, item.coordinates[2]);
-      projected.project(camera);
-
-      if (projected.z > 1 || projected.z < -1) {
+      const isActive = feature.id === activeId;
+      if (!isActive) {
         el.style.opacity = "0";
         el.style.pointerEvents = "none";
         continue;
       }
 
+      projected.set(feature.coordinates[0], 2.5, feature.coordinates[1]);
+      projected.project(camera);
+
+      const behindCamera = projected.z > 1 || projected.z < -1;
       const px = (projected.x * 0.5 + 0.5) * size.width;
       const py = (-projected.y * 0.5 + 0.5) * size.height;
-
       const inBounds =
-        px >= 24 &&
-        px <= size.width - 24 &&
-        py >= 24 &&
-        py <= size.height - 24;
+        px >= 40 && px <= size.width - 40 && py >= 20 && py <= size.height - 20;
 
-      el.style.opacity = inBounds ? "1" : "0";
-      el.style.pointerEvents = inBounds ? "auto" : "none";
+      if (behindCamera || !inBounds) {
+        el.style.opacity = "0";
+        el.style.pointerEvents = "none";
+        continue;
+      }
+
+      el.style.opacity = "1";
+      el.style.pointerEvents = "auto";
       el.style.transform = `translate3d(${px}px, ${py}px, 0) translate(-50%, -50%)`;
     }
   });
 
   return null;
 }
+/* eslint-enable react-hooks/immutability */
 
 function CameraRig({
   autoRotate,
   resetSignal,
-  selectedCase,
+  selectedFeature,
 }: {
   autoRotate: boolean;
   resetSignal: number;
-  selectedCase: InfraCase | null;
+  selectedFeature: MapFeature | null;
 }) {
   const controlsRef = useRef<OrbitControlsImpl | null>(null);
   const { camera } = useThree();
@@ -392,28 +378,32 @@ function CameraRig({
   }, [resetSignal]);
 
   useEffect(() => {
-    if (selectedCase) {
-      const [mx, , mz] = selectedCase.coordinates;
-      targetGoalRef.current.set(mx * 0.55, 0.45, mz * 0.55);
-      cameraGoalRef.current.set(
-        mx * 0.55 + 9.2,
-        8.6,
-        mz * 0.55 + 10.6
-      );
-      modeRef.current = "focus";
-    }
-  }, [selectedCase]);
+    if (!selectedFeature) return;
+    const [mx, mz] = selectedFeature.coordinates;
+    targetGoalRef.current.set(mx * 0.6, 0.45, mz * 0.6);
+    cameraGoalRef.current.set(mx * 0.6 + 8.4, 8.0, mz * 0.6 + 9.6);
+    modeRef.current = "focus";
+  }, [selectedFeature]);
 
   useFrame((_, delta) => {
-    if (!controlsRef.current || modeRef.current === "idle") return;
+    const controls = controlsRef.current;
+    if (!controls) return;
+
+    if (modeRef.current === "idle") {
+      // Kept in sync here rather than read during render.
+      controls.autoRotate = autoRotate;
+      return;
+    }
+
+    controls.autoRotate = false;
     const step = 1 - Math.exp(-4.5 * delta);
     camera.position.lerp(cameraGoalRef.current, step);
-    controlsRef.current.target.lerp(targetGoalRef.current, step);
-    controlsRef.current.update();
+    controls.target.lerp(targetGoalRef.current, step);
+    controls.update();
 
     if (
       camera.position.distanceTo(cameraGoalRef.current) < 0.08 &&
-      controlsRef.current.target.distanceTo(targetGoalRef.current) < 0.06
+      controls.target.distanceTo(targetGoalRef.current) < 0.06
     ) {
       modeRef.current = "idle";
     }
@@ -429,7 +419,7 @@ function CameraRig({
       maxDistance={26}
       maxPolarAngle={Math.PI / 2.18}
       minPolarAngle={0.22}
-      autoRotate={autoRotate && modeRef.current === "idle"}
+      autoRotate={autoRotate}
       autoRotateSpeed={0.42}
       onStart={() => {
         modeRef.current = "idle";
@@ -438,31 +428,50 @@ function CameraRig({
   );
 }
 
+/* ------------------------------------------------------------------ */
+/* Scene                                                               */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The 26 buildings and 24 markers are memoised so that hovering a single
+ * beacon — which updates the scene's hover state — does not re-render the
+ * entire city. Buildings are effectively static; markers only re-render when
+ * their own selection state changes.
+ */
+const MemoBuilding = memo(LowPolyBuilding);
+const MemoFeatureMarker = memo(FeatureMarker);
+
 interface CitySceneProps {
-  cases: InfraCase[];
-  selectedCaseId: string | null;
-  onSelectCase: (id: string) => void;
+  features: MapFeature[];
+  selectedId: string | null;
+  onSelect: (id: string | null) => void;
   autoRotate: boolean;
   resetSignal: number;
 }
 
 export default function CityScene({
-  cases,
-  selectedCaseId,
-  onSelectCase,
+  features,
+  selectedId,
+  onSelect,
   autoRotate,
   resetSignal,
 }: CitySceneProps) {
   const markerDomRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
 
-  const selectedCase = useMemo(
-    () => cases.find((c) => c.id === selectedCaseId) ?? null,
-    [cases, selectedCaseId]
+  const selectedFeature = useMemo(
+    () => features.find((feature) => feature.id === selectedId) ?? null,
+    [features, selectedId]
+  );
+
+  const activeId = selectedId ?? hoveredId;
+  const activeFeature = useMemo(
+    () => features.find((feature) => feature.id === activeId) ?? null,
+    [features, activeId]
   );
 
   return (
-    <div className="ct-panel ct-panel-glow relative h-[430px] w-full overflow-hidden rounded-xl sm:h-[520px] lg:h-[calc(100vh-148px)] lg:min-h-[540px]">
-      {/* Top-left sector HUD */}
+    <div className="ct-panel ct-panel-glow relative h-[440px] w-full overflow-hidden rounded-xl sm:h-[560px] xl:h-[calc(100vh-260px)] xl:min-h-[560px]">
       <div className="pointer-events-none absolute top-3 left-3 z-20 flex items-center gap-2 rounded-lg border border-cyan-500/30 bg-[#060b14]/85 px-3 py-1.5 backdrop-blur-sm">
         <Layers className="h-3.5 w-3.5 text-cyan-400" />
         <div>
@@ -470,25 +479,21 @@ export default function CityScene({
             SECTOR 04 · DHAKA URBAN MODEL
           </p>
           <p className="font-mono text-[10px] text-slate-400">
-            Click a Glowing Beacon to Inspect Records
+            Click a glowing beacon to inspect the record
           </p>
         </div>
       </div>
 
-      {/* Top-right click prompt pill */}
       <div className="pointer-events-none absolute top-3 right-3 z-20 hidden items-center gap-1.5 rounded-lg border border-cyan-500/25 bg-[#060b14]/85 px-2.5 py-1 font-mono text-[10px] text-cyan-200 backdrop-blur-sm sm:flex">
         <MousePointerClick className="h-3.5 w-3.5 text-cyan-400" />
-        <span>
-          {selectedCase
-            ? `Active: ${selectedCase.code}`
-            : "3 Monitored Nodes Interactive"}
-        </span>
+        <span>{features.length} monitored records</span>
       </div>
 
       <Canvas
         dpr={[1, 1.5]}
         camera={{ position: [12.6, 10.6, 14.2], fov: 42, near: 0.2, far: 90 }}
         gl={{ antialias: true, powerPreference: "high-performance" }}
+        onPointerMissed={() => onSelect(null)}
       >
         <color attach="background" args={["#050a14"]} />
         <fog attach="fog" args={["#050a14", 20, 40]} />
@@ -499,92 +504,72 @@ export default function CityScene({
 
         <DhakaRoadsAndCanal />
         {DHAKA_BUILDINGS.map((b) => (
-          <LowPolyBuilding key={b.id} b={b} />
+          <MemoBuilding key={b.id} b={b} />
         ))}
         <StreetlightCorridor />
 
-        {cases.map((item) => (
-          <InfrastructureMarker
-            key={item.id}
-            item={item}
-            isSelected={item.id === selectedCaseId}
-            onSelect={onSelectCase}
+        {features.map((feature) => (
+          <MemoFeatureMarker
+            key={feature.id}
+            feature={feature}
+            isSelected={feature.id === selectedId}
+            onSelect={onSelect}
+            onHover={setHoveredId}
           />
         ))}
 
-        <MarkerProjector cases={cases} markerDomRefs={markerDomRefs} />
+        <MarkerProjector
+          features={features}
+          activeId={activeId}
+          markerDomRefs={markerDomRefs}
+        />
 
         <CameraRig
           autoRotate={autoRotate}
           resetSignal={resetSignal}
-          selectedCase={selectedCase}
+          selectedFeature={selectedFeature}
         />
       </Canvas>
 
-      {/* Projected 2D DOM Marker Labels (zero nested roots inside R3F) */}
+      {/* Projected label for the hovered or selected beacon only */}
       <div className="pointer-events-none absolute inset-0 z-10 overflow-hidden">
-        {cases.map((item) => {
-          const st = getStatusStyle(item.status);
-          const isSelected = item.id === selectedCaseId;
-          const badgeTone =
-            item.status === "Unresolved"
-              ? "border-red-400/70 bg-red-950/90 text-red-100 shadow-[0_0_16px_rgba(239,68,68,0.45)]"
-              : item.status === "Delayed"
-                ? "border-amber-400/70 bg-amber-950/90 text-amber-100 shadow-[0_0_16px_rgba(245,158,11,0.45)]"
-                : "border-emerald-400/70 bg-emerald-950/90 text-emerald-100 shadow-[0_0_16px_rgba(16,185,129,0.45)]";
-
-          return (
-            <button
-              key={`overlay-${item.id}`}
-              ref={(el) => {
-                markerDomRefs.current[item.id] = el;
-              }}
-              type="button"
-              data-case-id={item.id}
-              aria-label={`Inspect ${item.markerLabel} (${item.status})`}
-              onClick={() => onSelectCase(item.id)}
-              style={{ opacity: 0 }}
-              className={`absolute top-0 left-0 flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-mono text-[10px] font-semibold tracking-wider whitespace-nowrap backdrop-blur-md transition-[opacity,box-shadow] cursor-pointer ${badgeTone} ${
-                isSelected
-                  ? "ring-2 ring-cyan-300 ring-offset-1 ring-offset-[#060b14]"
-                  : "hover:brightness-110"
-              }`}
-            >
-              <span className={`h-2 w-2 rounded-full ${st.dotClass}`} />
-              <span>{item.markerLabel}</span>
-            </button>
-          );
-        })}
+        {activeFeature ? (
+          <button
+            ref={(el) => {
+              markerDomRefs.current[activeFeature.id] = el;
+            }}
+            type="button"
+            onClick={() => onSelect(activeFeature.id)}
+            style={{ opacity: 0 }}
+            className={`absolute top-0 left-0 flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-mono text-[10px] font-semibold tracking-wider whitespace-nowrap shadow-lg backdrop-blur-md ${
+              TONES[mapFeatureTone(activeFeature.state)].ring
+            }`}
+          >
+            <span>{activeFeature.label}</span>
+          </button>
+        ) : null}
       </div>
 
-      {/* Bottom HUD bar */}
       <div className="pointer-events-none absolute right-3 bottom-3 left-3 z-20 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2 rounded-lg border border-slate-700/70 bg-[#060b14]/85 px-2.5 py-1 font-mono text-[10px] text-slate-300 backdrop-blur-sm">
           <Compass className="h-3.5 w-3.5 text-cyan-400" />
-          <span>Drag: Rotate · Right-Drag: Pan · Scroll: Zoom</span>
+          <span>Drag: rotate · Right-drag: pan · Scroll: zoom</span>
         </div>
 
-        {/* Clickable marker status legend */}
-        <div className="pointer-events-auto flex flex-wrap items-center gap-1.5 rounded-lg border border-slate-700/70 bg-[#060b14]/90 px-2.5 py-1 backdrop-blur-sm">
-          {cases.map((item) => {
-            const st = getStatusStyle(item.status);
-            const active = item.id === selectedCaseId;
-            return (
-              <button
-                key={`legend-${item.id}`}
-                type="button"
-                onClick={() => onSelectCase(item.id)}
-                className={`inline-flex items-center gap-1.5 rounded px-1.5 py-0.5 font-mono text-[10px] transition-colors cursor-pointer ${
-                  active
-                    ? "bg-cyan-500/20 text-cyan-200 ring-1 ring-cyan-400/50"
-                    : "text-slate-300 hover:bg-slate-800/80"
-                }`}
-              >
-                <span className={`h-2 w-2 rounded-full ${st.dotClass}`} />
-                <span>{st.label}</span>
-              </button>
-            );
-          })}
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-700/70 bg-[#060b14]/90 px-2.5 py-1 backdrop-blur-sm">
+          {(
+            [
+              ["unresolved", "Unresolved issue"],
+              ["delayed", "Delayed work"],
+              ["active", "Active project"],
+              ["completed", "Completed"],
+            ] as const
+          ).map(([state, label]) => (
+            <span key={state} className="inline-flex items-center gap-1.5 font-mono text-[10px] text-slate-300">
+              <span className={`h-2 w-2 rounded-full ${TONES[mapFeatureTone(state)].dot}`} />
+              {label}
+            </span>
+          ))}
         </div>
       </div>
     </div>

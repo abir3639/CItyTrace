@@ -10,6 +10,8 @@
   --ct-red: #ef4444;
   --ct-amber: #f59e0b;
   --ct-green: #10b981;
+  --ct-border: rgba(34, 211, 238, 0.16);
+  --ct-border-strong: rgba(34, 211, 238, 0.34);
   scrollbar-color: #1e3a5f #070d17;
   scrollbar-width: thin;
 }
@@ -28,6 +30,13 @@ body {
   overflow-x: hidden;
 }
 
+/* Consistent, visible keyboard focus across the whole app. */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid rgba(34, 211, 238, 0.65);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
 /* Subtle custom scrollbars for internal dark panels */
 .ct-scroll::-webkit-scrollbar {
   width: 6px;
@@ -43,13 +52,21 @@ body {
   border-radius: 9999px;
 }
 
+.ct-scroll::-webkit-scrollbar-thumb:hover {
+  background: #2b537f;
+}
+
+/* ------------------------------------------------------------------ */
+/* Surfaces                                                            */
+/* ------------------------------------------------------------------ */
+
 .ct-panel {
   background: linear-gradient(
     180deg,
     rgba(13, 22, 36, 0.92) 0%,
     rgba(9, 15, 26, 0.96) 100%
   );
-  border: 1px solid rgba(34, 211, 238, 0.16);
+  border: 1px solid var(--ct-border);
   box-shadow:
     0 0 0 1px rgba(6, 182, 212, 0.05),
     0 18px 40px -18px rgba(0, 0, 0, 0.8),
@@ -57,10 +74,15 @@ body {
 }
 
 .ct-panel-glow {
-  border-color: rgba(34, 211, 238, 0.34);
+  border-color: var(--ct-border-strong);
   box-shadow:
     0 0 28px -8px rgba(6, 182, 212, 0.25),
     inset 0 1px 0 rgba(34, 211, 238, 0.16);
+}
+
+.ct-panel-quiet {
+  background: rgba(8, 16, 29, 0.72);
+  border: 1px solid rgba(30, 58, 95, 0.6);
 }
 
 .ct-grid-backdrop {
@@ -71,6 +93,21 @@ body {
     linear-gradient(90deg, rgba(34, 211, 238, 0.03) 1px, transparent 1px);
   background-size: 100% 100%, 100% 100%, 36px 36px, 36px 36px;
 }
+
+/* Thin luminous rule used under section headings */
+.ct-rule {
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    rgba(34, 211, 238, 0.45),
+    rgba(34, 211, 238, 0.04) 70%,
+    transparent
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Motion                                                              */
+/* ------------------------------------------------------------------ */
 
 @keyframes ct-pulse-ring {
   0% {
@@ -89,4 +126,66 @@ body {
 
 .ct-pulse-ring {
   animation: ct-pulse-ring 2.2s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+}
+
+@keyframes ct-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.ct-fade-up {
+  animation: ct-fade-up 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes ct-sweep {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(200%);
+  }
+}
+
+/* Loading skeleton sweep */
+.ct-skeleton {
+  position: relative;
+  overflow: hidden;
+  background: rgba(30, 58, 95, 0.35);
+}
+
+.ct-skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 50%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(34, 211, 238, 0.12),
+    transparent
+  );
+  animation: ct-sweep 1.4s ease-in-out infinite;
+}
+
+/* Striped bar used to show spend that has no verified evidence */
+.ct-hatch {
+  background-image: repeating-linear-gradient(
+    45deg,
+    rgba(245, 158, 11, 0.55) 0 6px,
+    rgba(245, 158, 11, 0.15) 6px 12px
+  );
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ct-pulse-ring,
+  .ct-fade-up,
+  .ct-skeleton::after {
+    animation: none;
+  }
 }
