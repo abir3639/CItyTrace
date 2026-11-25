@@ -13,7 +13,6 @@ import { Badge } from "@/components/ui/Badge";
 import { Panel, PanelHeader } from "@/components/ui/Panel";
 import { anomalyKindLabel, type AnomalyFinding, type AnomalyKind } from "@/lib/anomalies";
 import { recordHref } from "@/lib/links";
-import { TONES } from "@/utils/formatters";
 
 const KIND_ICON: Record<AnomalyKind, LucideIcon> = {
   spend: Coins,
@@ -30,7 +29,6 @@ const SEVERITY_TONE = {
   low: "neutral",
 } as const;
 
-/** City-wide findings produced by the anomaly sweep. */
 export default function FindingsFeed({
   findings,
   limit = 8,
@@ -41,24 +39,24 @@ export default function FindingsFeed({
   const visible = findings.slice(0, limit);
 
   return (
-    <Panel className="flex flex-col gap-3 p-4">
+    <Panel className="flex flex-col gap-4 p-5">
       <PanelHeader
-        title="City-wide findings"
-        description="Every flagged inconsistency in the record, ranked by severity. Observations to verify — not allegations."
-        icon={<AlertTriangle className="h-3.5 w-3.5" />}
+        title="City-wide Findings"
+        description="Automated observations requiring verification — not allegations."
+        icon={<AlertTriangle className="h-4 w-4" />}
         actions={
-          <span className="font-mono text-[10px] text-slate-400">
+          <span className="text-[12px] font-medium text-[#6E6E73] tabular-nums">
             {visible.length} of {findings.length}
           </span>
         }
       />
 
       {findings.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-slate-700/80 bg-slate-950/30 px-3 py-6 text-center font-mono text-[10px] text-slate-500">
+        <p className="rounded-[14px] bg-[#F5F5F7] px-4 py-8 text-center text-[13px] text-[#6E6E73]">
           No inconsistencies detected in the current record.
         </p>
       ) : (
-        <ul className="grid grid-cols-1 gap-2 xl:grid-cols-2">
+        <ul className="grid grid-cols-1 gap-3 xl:grid-cols-2">
           {visible.map((finding) => {
             const Icon = KIND_ICON[finding.kind];
             const tone = SEVERITY_TONE[finding.severity];
@@ -67,36 +65,36 @@ export default function FindingsFeed({
             return (
               <li
                 key={finding.id}
-                className="flex flex-col gap-1.5 rounded-lg border border-slate-800 bg-[#08101d] p-3"
+                className="flex flex-col gap-2 rounded-[16px] border border-black/[0.06] bg-[#F9FAFB] p-4"
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="flex items-center gap-1.5 font-mono text-[9px] font-semibold tracking-wider text-slate-400 uppercase">
-                    <Icon className="h-3 w-3 text-cyan-400" />
+                  <span className="flex items-center gap-1.5 text-[12px] font-medium text-[#6E6E73]">
+                    <Icon className="h-3.5 w-3.5 text-[#007AFF]" />
                     {anomalyKindLabel(finding.kind)}
                   </span>
-                  <span className="flex items-center gap-1.5">
+                  <span className="flex items-center gap-2">
                     <Badge tone={tone} dot>
-                      {finding.severity.toUpperCase()}
+                      {finding.severity.charAt(0).toUpperCase() + finding.severity.slice(1)}
                     </Badge>
-                    <span className="font-mono text-[9px] text-slate-500">
+                    <span className="text-[11.5px] text-[#6E6E73] tabular-nums">
                       {finding.confidence}% conf.
                     </span>
                   </span>
                 </div>
 
-                <p className="text-[12px] font-semibold leading-snug text-slate-100">
+                <p className="text-[14px] font-semibold leading-snug text-[#1D1D1F]">
                   {finding.title}
                 </p>
-                <p className="text-[11px] leading-relaxed text-slate-400">{finding.detail}</p>
+                <p className="text-[12.5px] leading-relaxed text-[#48484A]">{finding.detail}</p>
 
-                <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-slate-800/70 pt-1.5">
+                <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-black/[0.05] pt-2.5 text-[12px]">
                   {projectHref && finding.projectId ? (
                     <Link
                       href={projectHref}
-                      className="inline-flex items-center gap-1 font-mono text-[10px] text-cyan-300 hover:text-cyan-100"
+                      className="inline-flex items-center gap-1 font-semibold text-[#007AFF] hover:underline tabular-nums"
                     >
                       {finding.projectId}
-                      <ArrowUpRight className="h-2.5 w-2.5" />
+                      <ArrowUpRight className="h-3 w-3" />
                     </Link>
                   ) : null}
                   {finding.issueIds.slice(0, 3).map((issueId) => {
@@ -106,14 +104,14 @@ export default function FindingsFeed({
                       <Link
                         key={issueId}
                         href={href}
-                        className={`inline-flex items-center gap-1 font-mono text-[10px] hover:text-slate-200 ${TONES.neutral.label}`}
+                        className="font-medium text-[#6E6E73] hover:text-[#1D1D1F] tabular-nums"
                       >
                         {issueId}
                       </Link>
                     );
                   })}
                   {finding.issueIds.length > 3 ? (
-                    <span className="font-mono text-[9px] text-slate-500">
+                    <span className="text-[11.5px] text-[#86868B] tabular-nums">
                       +{finding.issueIds.length - 3} more
                     </span>
                   ) : null}

@@ -4,26 +4,25 @@ import { Panel } from "@/components/ui/Panel";
 import ReportIssueForm from "@/components/issues/ReportIssueForm";
 
 export const metadata: Metadata = {
-  title: "Report an issue · CITYTRACE",
+  title: "Report an issue · CityTrace",
 };
 
 export default function ReportIssuePage() {
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-5">
       <PageHeader
         eyebrow="Civic Issues · New report"
-        title="Report a civic problem"
-        description="Your report becomes a permanent public record. It carries a status history that survives resolution, so if the same problem returns it is visible to everyone."
+        title="Report a Civic Problem"
+        description="Your report becomes a permanent public record with an immutable status trail, making recurring infrastructure failures easy to track."
       />
 
-      <Panel glow className="p-4 sm:p-5">
+      <Panel glow className="p-5 sm:p-6">
         <ReportIssueForm />
       </Panel>
 
-      <p className="font-mono text-[10px] leading-relaxed text-slate-500">
-        This is a demonstration environment. Reports are stored locally on the demo
-        server — not sent to any municipality — and every existing record you see in
-        CITYTRACE is fictional.
+      <p className="text-[12px] leading-relaxed text-[#6E6E73]">
+        Demonstration environment: submitted reports are stored locally on the demo server and
+        are not transmitted to any government agency.
       </p>
     </div>
   );

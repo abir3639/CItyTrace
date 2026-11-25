@@ -22,7 +22,7 @@ import { ProjectSpendChart } from "@/components/money/MoneyCharts";
 import { getEvidence, getSector, projectsById } from "@/data";
 import { listIssues } from "@/lib/issue-store";
 import { getBudgetFor, getMilestoneTotals, getProjectOverdueDays } from "@/lib/stats";
-import { PROJECT_STATUS_LABELS } from "@/types/citytrace";
+import { ISSUE_STATUS_LABELS, PROJECT_STATUS_LABELS } from "@/types/citytrace";
 import {
   TONES,
   daysBetween,
@@ -34,7 +34,6 @@ import {
   projectStatusTone,
   severityTone,
 } from "@/utils/formatters";
-import { ISSUE_STATUS_LABELS } from "@/types/citytrace";
 
 export const dynamic = "force-dynamic";
 
@@ -47,8 +46,8 @@ export async function generateMetadata({
   const project = projectsById.get(id);
   return {
     title: project
-      ? `${project.code} · Public Projects · CITYTRACE`
-      : "Project not found · CITYTRACE",
+      ? `${project.code} · Public Projects · CityTrace`
+      : "Project not found · CityTrace",
   };
 }
 
@@ -77,27 +76,27 @@ export default async function ProjectDetailPage({
   const statusTone = projectStatusTone(project.status);
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Link
           href="/public-projects"
-          className="inline-flex items-center gap-1.5 font-mono text-[11px] text-slate-400 hover:text-cyan-200"
+          className="inline-flex items-center gap-1.5 text-[13px] font-medium text-[#6E6E73] hover:text-[#1D1D1F]"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
-          Public projects
+          Public Projects
         </Link>
         <div className="flex flex-wrap items-center gap-2">
           <Link
             href={`/city-explorer?feature=project:${project.id}`}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-400/40 bg-cyan-500/10 px-2.5 py-1 font-mono text-[10px] text-cyan-200 hover:bg-cyan-500/20"
+            className="inline-flex items-center gap-1.5 rounded-full border border-black/[0.08] bg-white px-3.5 py-1.5 text-[12.5px] font-medium text-[#1D1D1F] shadow-sm hover:bg-[#F9FAFB]"
           >
-            <MapPin className="h-3 w-3" /> Locate on map
+            <MapPin className="h-3.5 w-3.5 text-[#007AFF]" /> Locate on 3D map
           </Link>
           <Link
             href={`/ai-investigation?project=${project.id}`}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-300/50 bg-gradient-to-r from-cyan-500 to-sky-500 px-2.5 py-1 font-mono text-[10px] font-bold text-slate-950 hover:brightness-110"
+            className="inline-flex items-center gap-1.5 rounded-full bg-[#007AFF] px-4 py-1.5 text-[12.5px] font-semibold text-white shadow-sm hover:bg-[#0066D6]"
           >
-            <Sparkles className="h-3 w-3" /> Investigate
+            <Sparkles className="h-3.5 w-3.5" /> Investigate
           </Link>
         </div>
       </div>
@@ -108,7 +107,9 @@ export default async function ProjectDetailPage({
         description={`${project.location}${sector ? ` — ${sector.name}, ${sector.ward}` : ""}`}
         actions={
           <div className="flex flex-wrap items-center gap-1.5">
-            <Badge tone={severityTone(project.severity)}>{project.severity.toUpperCase()}</Badge>
+            <Badge tone={severityTone(project.severity)}>
+              {project.severity.charAt(0).toUpperCase() + project.severity.slice(1)}
+            </Badge>
             <Badge tone={statusTone} dot>
               {PROJECT_STATUS_LABELS[project.status]}
             </Badge>
@@ -117,26 +118,25 @@ export default async function ProjectDetailPage({
         }
       />
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-        <div className="flex flex-col gap-4 xl:col-span-2">
-          {/* Money */}
-          <Panel glow className="p-4">
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
+        <div className="flex flex-col gap-5 xl:col-span-2">
+          <Panel glow className="p-5">
             <PanelHeader
-              title="Budget position"
-              description="Allocation, reported spend, and what independent evidence supports."
+              title="Budget Position"
+              description="Sanctioned allocation, reported expenditure, and independently verified spend."
             />
 
-            <div className="mt-3 flex flex-wrap items-baseline justify-between gap-2">
-              <p className="font-mono text-[11px] text-slate-400">
+            <div className="mt-4 flex flex-wrap items-baseline justify-between gap-2">
+              <p className="text-[13px] text-[#48484A] tabular-nums">
                 {formatBdt(project.reportedExpenditureBdt)} reported of{" "}
                 {formatBdt(project.allocatedBudgetBdt)} allocated
               </p>
-              <p className="font-mono text-sm font-bold text-cyan-200">
+              <p className="text-[15px] font-semibold text-[#0055CC] tabular-nums">
                 {formatPercent(budget.reportedPercent)}
               </p>
             </div>
 
-            <div className="mt-1.5">
+            <div className="mt-2">
               <SpendBar
                 allocated={project.allocatedBudgetBdt}
                 reported={project.reportedExpenditureBdt}
@@ -145,36 +145,36 @@ export default async function ProjectDetailPage({
               />
             </div>
 
-            <dl className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-              <div className="rounded-lg border border-slate-800 bg-[#08101d] px-2.5 py-2">
-                <dt className="font-mono text-[9px] tracking-wider text-slate-400 uppercase">Allocated</dt>
-                <dd className="mt-0.5 font-mono text-[12px] font-bold text-slate-100">
+            <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <div className="ct-surface-inset rounded-[14px] px-3.5 py-2.5">
+                <dt className="text-[11.5px] text-[#6E6E73]">Allocated</dt>
+                <dd className="mt-0.5 text-[15px] font-semibold text-[#1D1D1F] tabular-nums">
                   {formatBdtCompact(project.allocatedBudgetBdt)}
                 </dd>
               </div>
-              <div className="rounded-lg border border-slate-800 bg-[#08101d] px-2.5 py-2">
-                <dt className="font-mono text-[9px] tracking-wider text-slate-400 uppercase">Reported</dt>
-                <dd className="mt-0.5 font-mono text-[12px] font-bold text-cyan-300">
+              <div className="ct-surface-inset rounded-[14px] px-3.5 py-2.5">
+                <dt className="text-[11.5px] text-[#6E6E73]">Reported</dt>
+                <dd className="mt-0.5 text-[15px] font-semibold text-[#0055CC] tabular-nums">
                   {formatBdtCompact(project.reportedExpenditureBdt)}
                 </dd>
               </div>
-              <div className="rounded-lg border border-slate-800 bg-[#08101d] px-2.5 py-2">
-                <dt className="font-mono text-[9px] tracking-wider text-slate-400 uppercase">Verified</dt>
+              <div className="ct-surface-inset rounded-[14px] px-3.5 py-2.5">
+                <dt className="text-[11.5px] text-[#6E6E73]">Verified</dt>
                 <dd
-                  className={`mt-0.5 font-mono text-[12px] font-bold ${
+                  className={`mt-0.5 text-[15px] font-semibold tabular-nums ${
                     project.verifiedExpenditureBdt === undefined
-                      ? "text-amber-300"
-                      : "text-emerald-300"
+                      ? "text-[#B25000]"
+                      : "text-[#1A7F37]"
                   }`}
                 >
                   {project.verifiedExpenditureBdt === undefined
-                    ? "missing"
+                    ? "Missing"
                     : formatBdtCompact(project.verifiedExpenditureBdt)}
                 </dd>
               </div>
-              <div className="rounded-lg border border-amber-500/25 bg-amber-950/15 px-2.5 py-2">
-                <dt className="font-mono text-[9px] tracking-wider text-amber-300/80 uppercase">Unverified</dt>
-                <dd className="mt-0.5 font-mono text-[12px] font-bold text-amber-300">
+              <div className="rounded-[14px] border border-[#FF9500]/25 bg-[#FF9500]/[0.08] px-3.5 py-2.5">
+                <dt className="text-[11.5px] text-[#B25000]">Unverified</dt>
+                <dd className="mt-0.5 text-[15px] font-semibold text-[#B25000] tabular-nums">
                   {formatBdtCompact(
                     (project.verifiedExpenditureBdt === undefined
                       ? project.reportedExpenditureBdt
@@ -184,7 +184,7 @@ export default async function ProjectDetailPage({
               </div>
             </dl>
 
-            <div className="mt-3">
+            <div className="mt-4">
               <ProjectSpendChart
                 allocated={project.allocatedBudgetBdt}
                 reported={project.reportedExpenditureBdt}
@@ -193,15 +193,14 @@ export default async function ProjectDetailPage({
             </div>
           </Panel>
 
-          {/* Milestones */}
-          <Panel className="p-4">
+          <Panel className="p-5">
             <PanelHeader
-              title="Milestone schedule"
+              title="Milestone Schedule"
               description={`${milestones.met} met · ${milestones.missed} missed · ${milestones.inProgress} in progress · ${milestones.pending} pending`}
-              icon={<CalendarClock className="h-3.5 w-3.5" />}
+              icon={<CalendarClock className="h-4 w-4" />}
             />
 
-            <ol className="mt-3 space-y-3 border-l border-slate-800 pl-4">
+            <ol className="mt-4 space-y-4 border-l border-black/[0.08] pl-4">
               {project.milestones.map((milestone) => {
                 const tone = MILESTONE_TONE[milestone.status];
                 const lateDays =
@@ -212,41 +211,41 @@ export default async function ProjectDetailPage({
                 return (
                   <li key={milestone.id} className="relative">
                     <span
-                      className={`absolute top-1 -left-[21px] h-2.5 w-2.5 rounded-full border border-[#060b14] ${TONES[tone].dot}`}
+                      className={`absolute top-1.5 -left-[21px] h-2.5 w-2.5 rounded-full ring-2 ring-white ${TONES[tone].dot}`}
                     />
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-[12px] font-semibold text-slate-100">
+                      <span className="text-[14px] font-semibold text-[#1D1D1F]">
                         {milestone.title}
                       </span>
                       <Badge tone={tone}>
                         {milestone.status === "met" ? (
                           <span className="inline-flex items-center gap-1">
-                            <CheckCircle2 className="h-2.5 w-2.5" /> met
+                            <CheckCircle2 className="h-3 w-3" /> Met
                           </span>
                         ) : milestone.status === "missed" ? (
                           <span className="inline-flex items-center gap-1">
-                            <XCircle className="h-2.5 w-2.5" /> missed
+                            <XCircle className="h-3 w-3" /> Missed
                           </span>
                         ) : (
                           milestone.status
                         )}
                       </Badge>
                     </div>
-                    <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 font-mono text-[10px] text-slate-400">
+                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[12px] text-[#6E6E73] tabular-nums">
                       <span className="inline-flex items-center gap-1">
-                        <Clock className="h-2.5 w-2.5" /> planned {formatDate(milestone.plannedDate)}
+                        <Clock className="h-3 w-3" /> Planned {formatDate(milestone.plannedDate)}
                       </span>
                       {milestone.actualDate ? (
                         <span className={lateDays > 0 ? TONES.warn.label : TONES.ok.label}>
-                          actual {formatDate(milestone.actualDate)}
+                          Actual {formatDate(milestone.actualDate)}
                           {lateDays > 0 ? ` (+${lateDays}d)` : ""}
                         </span>
                       ) : milestone.status === "missed" ? (
-                        <span className={TONES.danger.label}>never recorded</span>
+                        <span className={TONES.danger.label}>Never recorded</span>
                       ) : null}
                     </div>
                     {milestone.note ? (
-                      <p className="mt-1 text-[11px] leading-relaxed text-slate-300">
+                      <p className="mt-1 text-[13px] leading-relaxed text-[#48484A]">
                         {milestone.note}
                       </p>
                     ) : null}
@@ -256,48 +255,50 @@ export default async function ProjectDetailPage({
             </ol>
           </Panel>
 
-          {/* Evidence */}
-          <Panel className="p-4">
+          <Panel className="p-5">
             <PanelHeader
               title={`Evidence (${evidence.length})`}
-              description="Documents, measurements and photographs held against this work."
+              description="Documents, measurements, and site photographs attached to this project."
             />
             <div className="mt-3">
               <EvidenceGallery items={evidence} />
             </div>
           </Panel>
 
-          {/* Linked issues */}
-          <Panel className="p-4">
+          <Panel className="p-5">
             <PanelHeader
-              title={`Linked civic issues (${linkedIssues.length})`}
-              description="Citizen reports tied to this location."
-              icon={<Wrench className="h-3.5 w-3.5" />}
+              title={`Linked Civic Issues (${linkedIssues.length})`}
+              description="Citizen reports linked to this location."
+              icon={<Wrench className="h-4 w-4" />}
             />
             {linkedIssues.length === 0 ? (
-              <p className="mt-2 rounded-lg border border-slate-800 bg-[#08101d] p-2.5 text-[11px] text-slate-300">
+              <p className="mt-3 rounded-[14px] bg-[#F5F5F7] p-3.5 text-[13px] text-[#6E6E73]">
                 No civic issue has been recorded against this work.
               </p>
             ) : (
-              <ul className="mt-2 space-y-1.5">
+              <ul className="mt-3 space-y-2">
                 {linkedIssues.map((issue) => (
                   <li key={issue.id}>
                     <Link
                       href={`/civic-issues/${issue.id}`}
-                      className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-800 bg-[#08101d] px-2.5 py-2 transition-colors hover:border-cyan-500/40 hover:bg-[#0c182b]"
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-[14px] border border-black/[0.06] bg-[#F9FAFB] px-3.5 py-3 transition-colors hover:bg-[#F0F2F5]"
                     >
-                      <span className="flex min-w-0 items-center gap-2">
+                      <span className="flex min-w-0 items-center gap-2.5">
                         <span
-                          className={`h-1.5 w-1.5 shrink-0 rounded-full ${TONES[issueStatusTone(issue.status)].dot}`}
+                          className={`h-2 w-2 shrink-0 rounded-full ${TONES[issueStatusTone(issue.status)].dot}`}
                         />
-                        <span className="font-mono text-[10px] text-cyan-300">{issue.code}</span>
-                        <span className="truncate text-[11px] text-slate-200">{issue.title}</span>
+                        <span className="text-[12px] font-semibold text-[#0055CC] tabular-nums">
+                          {issue.code}
+                        </span>
+                        <span className="truncate text-[13px] font-medium text-[#1D1D1F]">
+                          {issue.title}
+                        </span>
                       </span>
                       <span className="flex items-center gap-2">
                         <Badge tone={issueStatusTone(issue.status)}>
                           {ISSUE_STATUS_LABELS[issue.status]}
                         </Badge>
-                        <ArrowUpRight className="h-3 w-3 text-slate-500" />
+                        <ArrowUpRight className="h-3.5 w-3.5 text-[#86868B]" />
                       </span>
                     </Link>
                   </li>
@@ -307,29 +308,28 @@ export default async function ProjectDetailPage({
           </Panel>
         </div>
 
-        {/* Sidebar */}
-        <div className="flex flex-col gap-4">
-          <Panel className="p-4">
-            <PanelHeader title="Delivery" description="Schedule and verified progress." />
-            <div className="mt-3">
-              <div className="flex items-center justify-between font-mono text-[10px] text-slate-400">
+        <div className="flex flex-col gap-5">
+          <Panel className="p-5">
+            <PanelHeader title="Delivery Summary" description="Schedule and verified progress." />
+            <div className="mt-3.5">
+              <div className="flex items-center justify-between text-[12.5px] text-[#6E6E73]">
                 <span>Verified physical progress</span>
-                <span className="font-semibold text-slate-200">
+                <span className="font-semibold text-[#1D1D1F] tabular-nums">
                   {project.verifiedProgressPercent}%
                 </span>
               </div>
               <ProgressBar
                 value={project.verifiedProgressPercent}
                 tone={statusTone}
-                className="mt-1"
+                className="mt-1.5"
                 label={`${project.verifiedProgressPercent} percent verified progress`}
               />
             </div>
 
-            <dl className="mt-3 space-y-0.5">
+            <dl className="mt-4">
               <KeyValue
                 label="Authority"
-                value={<span className="text-[10px] leading-snug">{project.authority}</span>}
+                value={<span className="text-[12px] leading-snug">{project.authority}</span>}
               />
               <KeyValue label="Started" value={formatDate(project.startDate)} />
               <KeyValue label="Planned finish" value={formatDate(project.plannedCompletionDate)} />
@@ -341,8 +341,8 @@ export default async function ProjectDetailPage({
                 tone={project.actualCompletionDate ? "ok" : "neutral"}
               />
               <KeyValue
-                label="Overdue"
-                value={overdue > 0 ? `${overdue} days` : "on schedule"}
+                label="Schedule status"
+                value={overdue > 0 ? `${overdue} days overdue` : "On schedule"}
                 tone={overdue > 0 ? "warn" : "ok"}
               />
               <KeyValue
@@ -353,22 +353,25 @@ export default async function ProjectDetailPage({
             </dl>
           </Panel>
 
-          <Panel className="p-4">
-            <PanelHeader title="Procurement" icon={<Building2 className="h-3.5 w-3.5" />} />
-            <p className="mt-2 text-[11px] leading-relaxed text-slate-300">
+          <Panel className="p-5">
+            <PanelHeader title="Scope & Notes" icon={<Building2 className="h-4 w-4" />} />
+            <p className="mt-2.5 text-[13px] leading-relaxed text-[#48484A]">
               {project.description}
             </p>
             {project.workNote ? (
-              <p className="mt-2 rounded border border-slate-800 bg-[#08101d] p-2 font-mono text-[10px] leading-relaxed text-slate-400">
+              <p className="mt-3 rounded-[12px] bg-[#F5F5F7] p-3 text-[12px] leading-relaxed text-[#6E6E73]">
                 Work note: {project.workNote}
               </p>
             ) : null}
           </Panel>
 
-          <Panel className="p-4">
-            <PanelHeader title="Category" />
+          <Panel className="p-5">
+            <PanelHeader title="Classification" />
             <dl className="mt-2">
-              <KeyValue label="Sector" value={sector ? `${sector.code} · ${sector.name}` : project.sectorId} />
+              <KeyValue
+                label="Sector"
+                value={sector ? `${sector.code} · ${sector.name}` : project.sectorId}
+              />
               <KeyValue label="Ward" value={sector?.ward ?? "—"} />
               <KeyValue label="Type" value={project.category.replace("-", " ")} />
               <KeyValue label="Location key" value={project.locationKey} />

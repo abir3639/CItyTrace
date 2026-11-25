@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { ShieldAlert } from "lucide-react";
+import { Info } from "lucide-react";
 import { TONES, type Tone } from "@/utils/formatters";
 
 interface BadgeProps {
@@ -11,7 +11,7 @@ interface BadgeProps {
   title?: string;
 }
 
-/** Compact status pill, toned by the shared colour vocabulary. */
+/** Minimal status pill toned by the shared Apple semantic palette. */
 export function Badge({
   children,
   tone = "neutral",
@@ -23,7 +23,7 @@ export function Badge({
   return (
     <span
       title={title}
-      className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 font-mono text-[10px] font-semibold whitespace-nowrap ${style.badge} ${className}`}
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11.5px] font-medium whitespace-nowrap ${style.badge} ${className}`}
     >
       {dot ? <span className={`h-1.5 w-1.5 rounded-full ${style.dot}`} /> : null}
       {children}
@@ -31,20 +31,20 @@ export function Badge({
   );
 }
 
-/** The amber "this is fictional data" marker required throughout the app. */
+/** Subtle disclosure pill marking simulated demonstration records. */
 export function DemoBadge({
   className = "",
-  label = "SIMULATED DEMO DATA",
+  label = "Demo data",
 }: {
   className?: string;
   label?: string;
 }) {
   return (
     <span
-      title="All records, figures and authorities in CITYTRACE are fictional demonstration data."
-      className={`inline-flex items-center gap-1.5 rounded-full border border-amber-400/40 bg-amber-500/10 px-2.5 py-0.5 font-mono text-[10px] font-semibold tracking-[0.12em] text-amber-200 ${className}`}
+      title="All records, figures and authorities in CityTrace are fictional demonstration data."
+      className={`inline-flex items-center gap-1.5 rounded-full border border-black/[0.08] bg-black/[0.04] px-2.5 py-0.5 text-[11.5px] font-medium text-[#6E6E73] whitespace-nowrap ${className}`}
     >
-      <ShieldAlert className="h-3 w-3" />
+      <Info className="h-3 w-3 text-[#86868B]" aria-hidden="true" />
       {label}
     </span>
   );

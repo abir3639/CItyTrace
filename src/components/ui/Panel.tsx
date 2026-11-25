@@ -3,26 +3,26 @@ import type { ReactNode } from "react";
 interface PanelProps {
   children: ReactNode;
   className?: string;
-  /** Stronger cyan border + outer glow for focal panels. */
+  /** Elevated crisp card shadow for focal surfaces. */
   glow?: boolean;
-  /** Flatter surface for nested/inset content. */
+  /** Soft inset surface (#F5F5F7) for nested content. */
   quiet?: boolean;
 }
 
-/** The single surface primitive every CITYTRACE module is built from. */
-export function Panel({ children, className = "", glow = false, quiet = false }: PanelProps) {
-  const surface = quiet ? "ct-panel-quiet" : "ct-panel";
+/** Primary white surface primitive used across CityTrace modules. */
+export function Panel({
+  children,
+  className = "",
+  glow = false,
+  quiet = false,
+}: PanelProps) {
+  const surface = quiet
+    ? "ct-surface-inset rounded-[16px]"
+    : glow
+      ? "ct-surface-elevated rounded-[20px]"
+      : "ct-surface rounded-[20px]";
   return (
-    <div
-      className={[
-        "rounded-xl",
-        surface,
-        glow ? "ct-panel-glow" : "",
-        className,
-      ]
-        .filter(Boolean)
-        .join(" ")}
-    >
+    <div className={[surface, className].filter(Boolean).join(" ")}>
       {children}
     </div>
   );
@@ -36,7 +36,7 @@ interface PanelHeaderProps {
   className?: string;
 }
 
-/** Title row used at the top of most panels. */
+/** Clean editorial title row used at the top of cards and panels. */
 export function PanelHeader({
   title,
   description,
@@ -48,16 +48,16 @@ export function PanelHeader({
     <div className={`flex flex-wrap items-start justify-between gap-3 ${className}`}>
       <div className="flex min-w-0 items-start gap-2.5">
         {icon ? (
-          <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-cyan-400/30 bg-cyan-500/10 text-cyan-300">
+          <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[#F5F5F7] text-[#1D1D1F]">
             {icon}
           </span>
         ) : null}
         <div className="min-w-0">
-          <h3 className="font-mono text-[11px] font-semibold tracking-[0.16em] text-cyan-300 uppercase">
+          <h3 className="text-[15px] font-semibold tracking-[-0.015em] text-[#1D1D1F]">
             {title}
           </h3>
           {description ? (
-            <p className="mt-0.5 text-[11px] leading-relaxed text-slate-400">
+            <p className="mt-0.5 text-[13px] leading-relaxed text-[#6E6E73]">
               {description}
             </p>
           ) : null}
@@ -68,7 +68,7 @@ export function PanelHeader({
   );
 }
 
-/** Small uppercase label for grouping rows inside a panel. */
+/** Small section label for grouping rows inside a panel. */
 export function SectionLabel({
   children,
   className = "",
@@ -77,9 +77,7 @@ export function SectionLabel({
   className?: string;
 }) {
   return (
-    <p
-      className={`font-mono text-[10px] font-semibold tracking-[0.16em] text-slate-400 uppercase ${className}`}
-    >
+    <p className={`text-[12px] font-medium text-[#6E6E73] ${className}`}>
       {children}
     </p>
   );

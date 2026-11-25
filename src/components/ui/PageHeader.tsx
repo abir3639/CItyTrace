@@ -6,11 +6,11 @@ interface PageHeaderProps {
   title: string;
   description: string;
   actions?: ReactNode;
-  /** Show the standing simulated-data disclosure. Defaults to true. */
+  /** Show the subtle simulated-data disclosure. Defaults to true. */
   showDemoBadge?: boolean;
 }
 
-/** Consistent page title block used by every route. */
+/** Clean Apple-inspired page header block used across CityTrace routes. */
 export function PageHeader({
   eyebrow,
   title,
@@ -19,23 +19,21 @@ export function PageHeader({
   showDemoBadge = true,
 }: PageHeaderProps) {
   return (
-    <div className="flex flex-wrap items-start justify-between gap-3">
+    <div className="flex flex-wrap items-end justify-between gap-4 pb-1">
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
-          <p className="font-mono text-[10px] font-semibold tracking-[0.2em] text-cyan-400 uppercase">
-            {eyebrow}
-          </p>
+          <p className="text-[12.5px] font-medium text-[#007AFF]">{eyebrow}</p>
           {showDemoBadge ? <DemoBadge /> : null}
         </div>
-        <h1 className="mt-1.5 text-xl font-bold tracking-tight text-slate-50 sm:text-2xl">
+        <h1 className="mt-1 text-[26px] font-semibold tracking-[-0.03em] leading-tight text-[#1D1D1F] sm:text-[30px]">
           {title}
         </h1>
-        <p className="mt-1 max-w-3xl text-xs leading-relaxed text-slate-400 sm:text-[13px]">
+        <p className="mt-1.5 max-w-2xl text-[14px] leading-relaxed text-[#6E6E73]">
           {description}
         </p>
       </div>
       {actions ? (
-        <div className="flex flex-wrap items-center gap-2">{actions}</div>
+        <div className="flex flex-wrap items-center gap-2.5">{actions}</div>
       ) : null}
     </div>
   );

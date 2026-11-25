@@ -1,9 +1,11 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronsLeft, ChevronsRight, ShieldAlert } from "lucide-react";
+import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { NAV_ITEMS } from "@/lib/navigation";
+import { DemoBadge } from "@/components/ui/Badge";
 
 interface SidebarProps {
   collapsed: boolean;
@@ -15,15 +17,15 @@ interface SidebarProps {
 
 function BrandMark() {
   return (
-    <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-cyan-400/40 bg-cyan-950/50 shadow-[0_0_20px_-4px_rgba(34,211,238,0.45)]">
-      <svg viewBox="0 0 36 36" fill="none" className="h-5 w-5 text-cyan-300" aria-hidden="true">
+    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] bg-[#007AFF] text-white shadow-[0_2px_8px_-2px_rgba(0,122,255,0.45)]">
+      <svg viewBox="0 0 24 24" fill="none" className="h-[18px] w-[18px]" aria-hidden="true">
         <path
-          d="M18 3L31 10.5V25.5L18 33L5 25.5V10.5L18 3Z"
+          d="M12 3.5L19.5 7.75V16.25L12 20.5L4.5 16.25V7.75L12 3.5Z"
           stroke="currentColor"
           strokeWidth="1.75"
+          strokeLinejoin="round"
         />
-        <circle cx="18" cy="18" r="5.5" stroke="#22d3ee" strokeWidth="1.5" strokeDasharray="2.5 2" />
-        <circle cx="18" cy="18" r="2.2" fill="#22d3ee" />
+        <circle cx="12" cy="12" r="2.75" fill="currentColor" />
       </svg>
     </span>
   );
@@ -37,35 +39,121 @@ export default function Sidebar({
   onCloseMobile,
 }: SidebarProps) {
   const pathname = usePathname();
+  const [hovered, setHovered] = useState(false);
+  const [focusExpanded, setFocusExpanded] = useState(false);
+  const [suppressHover, setSuppressHover] = useState(false);
+  const leaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (leaveTimerRef.current) {
+        clearTimeout(leaveTimerRef.current);
+      }
+    };
+  }, []);
+
+  const isHoverPreview = collapsed && (hovered || focusExpanded) && !suppressHover;
+  const isVisuallyCollapsed = collapsed && !isHoverPreview;
+
+  const clearLeaveTimer = () => {
+    if (leaveTimerRef.current) {
+      clearTimeout(leaveTimerRef.current);
+      leaveTimerRef.current = null;
+    }
+  };
+
+  const handlePointerEnter = (e: React.PointerEvent<HTMLElement>) => {
+    if (e.pointerType === "touch") return;
+    clearLeaveTimer();
+    if (collapsed && !suppressHover) {
+      setHovered(true);
+    }
+  };
+
+  const handlePointerLeave = (e: React.PointerEvent<HTMLElement>) => {
+    if (e.pointerType === "touch") return;
+    clearLeaveTimer();
+    if (suppressHover) {
+      setSuppressHover(false);
+      setHovered(false);
+      return;
+    }
+    if (hovered) {
+      leaveTimerRef.current = setTimeout(() => {
+        setHovered(false);
+        leaveTimerRef.current = null;
+      }, 90);
+    }
+  };
+
+  const handleFocusCapture = (e: React.FocusEvent<HTMLElement>) => {
+    if (
+      collapsed &&
+      !suppressHover &&
+      e.target instanceof HTMLElement &&
+      e.target.matches(":focus-visible")
+    ) {
+      setFocusExpanded(true);
+    }
+  };
+
+  const handleBlurCapture = (e: React.FocusEvent<HTMLElement>) => {
+    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+      setFocusExpanded(false);
+    }
+  };
+
+  const handleToggleClick = () => {
+    clearLeaveTimer();
+    setHovered(false);
+    setFocusExpanded(false);
+    if (!collapsed) {
+      setSuppressHover(true);
+    } else {
+      setSuppressHover(false);
+    }
+    onToggleCollapse();
+  };
 
   return (
     <aside
       aria-label="Application sidebar"
+      data-hover-expanded={isHoverPreview ? "true" : undefined}
+      onPointerEnter={handlePointerEnter}
+      onPointerLeave={handlePointerLeave}
+      onFocusCapture={handleFocusCapture}
+      onBlurCapture={handleBlurCapture}
       className={[
-        "fixed top-0 left-0 z-50 flex h-full w-[248px] flex-col border-r border-slate-800/80 bg-[#070d18]/96 backdrop-blur-lg",
-        "transition-[transform,width] duration-200",
+        "ct-sidebar-glass fixed top-0 bottom-0 left-0 z-50 flex h-full w-[248px] flex-col overflow-x-hidden rounded-r-[26px]",
+        "lg:top-3 lg:bottom-3 lg:left-3 lg:h-auto lg:rounded-[26px]",
+        isHoverPreview ? "ct-sidebar-glass-overlay" : "",
+        "transition-[transform,width,box-shadow,background] duration-250 ease-[cubic-bezier(0.2,0.8,0.2,1)] motion-reduce:transition-none",
         mobileOpen ? "translate-x-0" : "-translate-x-full",
         "lg:translate-x-0",
-        collapsed ? "lg:w-[76px]" : "lg:w-[248px]",
+        isVisuallyCollapsed ? "lg:w-[78px]" : "lg:w-[248px]",
       ].join(" ")}
     >
       {/* Brand */}
-      <div className="flex h-[57px] shrink-0 items-center gap-2.5 border-b border-slate-800/80 px-3.5">
-        <Link href="/" onClick={onNavigate} aria-label="CITYTRACE home" className="flex items-center gap-2.5">
+      <div className="relative z-10 flex h-[60px] shrink-0 items-center px-3">
+        <Link
+          href="/"
+          onClick={onNavigate}
+          aria-label="CityTrace home"
+          className="flex w-full items-center gap-2.5 overflow-hidden rounded-xl px-[10px] py-1"
+        >
           <BrandMark />
-          <span className={`min-w-0 ${collapsed ? "lg:hidden" : ""}`}>
-            <span className="block text-sm font-bold tracking-[0.16em] text-slate-50">
-              CITY<span className="text-cyan-400">TRACE</span>
-            </span>
-            <span className="block font-mono text-[9px] tracking-[0.12em] text-slate-500 uppercase">
-              Civic Intelligence
-            </span>
+          <span
+            className={`whitespace-nowrap text-[16px] font-semibold tracking-[-0.025em] text-[#1D1D1F] transition-opacity duration-200 motion-reduce:transition-none ${
+              isVisuallyCollapsed ? "lg:pointer-events-none lg:opacity-0" : "opacity-100"
+            }`}
+          >
+            CityTrace
           </span>
         </Link>
       </div>
 
       {/* Navigation */}
-      <nav aria-label="Primary" className="ct-scroll flex-1 overflow-y-auto px-2 py-3">
+      <nav aria-label="Primary" className="ct-scroll relative z-10 flex-1 overflow-x-hidden overflow-y-auto px-3 py-2">
         <ul className="space-y-1">
           {NAV_ITEMS.map((item) => {
             const active =
@@ -77,27 +165,28 @@ export default function Sidebar({
                   href={item.href}
                   onClick={onNavigate}
                   aria-current={active ? "page" : undefined}
-                  title={collapsed ? item.label : undefined}
+                  title={isVisuallyCollapsed ? item.label : undefined}
                   className={[
-                    "group relative flex items-center gap-2.5 rounded-lg px-2.5 py-2 transition-colors",
+                    "group flex items-center gap-3 overflow-hidden rounded-xl py-2.5 pl-[17px] pr-3 text-[13.5px] transition-all duration-150 active:scale-[0.98]",
                     active
-                      ? "bg-cyan-500/15 text-cyan-100 ring-1 ring-cyan-400/40"
-                      : "text-slate-300 hover:bg-slate-800/60 hover:text-slate-100",
+                      ? "bg-[#007AFF]/[0.14] font-semibold text-[#0055CC] shadow-[inset_0_1px_0_rgba(255,255,255,0.75),0_2px_8px_-2px_rgba(0,122,255,0.18)] ring-1 ring-[#007AFF]/15"
+                      : "font-medium text-[#1D1D1F]/85 hover:bg-white/55 hover:text-[#1D1D1F] hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]",
                   ].join(" ")}
                 >
-                  {active ? (
-                    <span className="absolute top-1.5 bottom-1.5 left-0 w-0.5 rounded-full bg-cyan-400 shadow-[0_0_8px_#22d3ee]" />
-                  ) : null}
                   <Icon
-                    className={`h-4 w-4 shrink-0 ${active ? "text-cyan-300" : "text-slate-400 group-hover:text-cyan-300"}`}
+                    strokeWidth={active ? 2 : 1.75}
+                    className={`h-[18px] w-[18px] shrink-0 transition-colors ${
+                      active
+                        ? "text-[#007AFF]"
+                        : "text-[#525257] group-hover:text-[#1D1D1F]"
+                    }`}
                   />
-                  <span className={`min-w-0 flex-1 ${collapsed ? "lg:hidden" : ""}`}>
-                    <span className="block truncate text-[12.5px] font-medium leading-tight">
-                      {item.label}
-                    </span>
-                    <span className="mt-0.5 block truncate font-mono text-[9px] leading-tight text-slate-500">
-                      {item.description}
-                    </span>
+                  <span
+                    className={`whitespace-nowrap transition-opacity duration-200 motion-reduce:transition-none ${
+                      isVisuallyCollapsed ? "lg:opacity-0" : "opacity-100"
+                    }`}
+                  >
+                    {item.label}
                   </span>
                 </Link>
               </li>
@@ -106,44 +195,80 @@ export default function Sidebar({
         </ul>
       </nav>
 
-      {/* Footer */}
-      <div className="shrink-0 space-y-2 border-t border-slate-800/80 p-2.5">
+      {/* Footer: Demo badge, profile & collapse control */}
+      <div className="relative z-10 flex shrink-0 flex-col border-t border-white/55 p-3 shadow-[0_-1px_0_rgba(15,23,42,0.05)]">
         <div
-          className={`flex items-center gap-2 rounded-lg border border-amber-400/30 bg-amber-500/10 px-2 py-1.5 ${collapsed ? "lg:justify-center" : ""}`}
-          title="All CITYTRACE records are fictional demonstration data."
+          className={`grid transition-[grid-template-rows,opacity] duration-200 ease-[cubic-bezier(0.2,0.8,0.2,1)] motion-reduce:transition-none ${
+            isVisuallyCollapsed ? "lg:grid-rows-[0fr] lg:opacity-0" : "grid-rows-[1fr] opacity-100"
+          }`}
         >
-          <ShieldAlert className="h-3.5 w-3.5 shrink-0 text-amber-300" />
-          <span className={`font-mono text-[9px] font-semibold tracking-[0.08em] text-amber-200 ${collapsed ? "lg:hidden" : ""}`}>
-            SIMULATED DATA
+          <div className="overflow-hidden">
+            <div className="px-1 pb-2.5 whitespace-nowrap">
+              <DemoBadge label="Demo mode · simulated" />
+            </div>
+          </div>
+        </div>
+
+        <div
+          className="flex items-center gap-2.5 overflow-hidden rounded-xl border border-white/65 bg-white/45 py-2 pl-[12px] pr-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.8),0_1px_4px_rgba(15,23,42,0.04)]"
+          title="Demo Citizen · Read-only demonstration session"
+        >
+          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#1D1D1F] text-[11px] font-semibold text-white">
+            DC
           </span>
+          <div
+            className={`min-w-0 flex-1 whitespace-nowrap leading-tight transition-opacity duration-200 motion-reduce:transition-none ${
+              isVisuallyCollapsed ? "lg:opacity-0" : "opacity-100"
+            }`}
+          >
+            <p className="truncate text-[12.5px] font-medium text-[#1D1D1F]">
+              Demo Citizen
+            </p>
+            <p className="truncate text-[11px] text-[#525257]">
+              Read-only session
+            </p>
+          </div>
         </div>
 
-        <div className={`flex items-center gap-1.5 ${collapsed ? "lg:flex-col" : ""}`}>
-          <button
-            type="button"
-            onClick={onToggleCollapse}
-            className="hidden flex-1 items-center justify-center gap-1.5 rounded-lg border border-slate-700/80 bg-slate-900/70 px-2 py-1.5 font-mono text-[10px] text-slate-300 transition-colors hover:border-cyan-500/40 hover:text-cyan-200 lg:flex cursor-pointer"
-            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          >
-            {collapsed ? (
-              <ChevronsRight className="h-3.5 w-3.5" />
-            ) : (
-              <>
-                <ChevronsLeft className="h-3.5 w-3.5" />
-                <span>Collapse</span>
-              </>
-            )}
-          </button>
+        <button
+          type="button"
+          onClick={handleToggleClick}
+          className="mt-2.5 hidden w-full items-center gap-3 overflow-hidden rounded-xl py-2 pl-[18px] pr-3 text-[12.5px] font-medium text-[#525257] transition-all hover:bg-white/55 hover:text-[#1D1D1F] hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.75)] lg:flex cursor-pointer"
+          aria-label={collapsed ? "Pin sidebar open" : "Collapse sidebar"}
+          title={
+            collapsed
+              ? isVisuallyCollapsed
+                ? "Expand and pin sidebar"
+                : "Pin sidebar open"
+              : "Collapse sidebar"
+          }
+        >
+          {collapsed ? (
+            <>
+              <PanelLeftOpen className="h-4 w-4 shrink-0" strokeWidth={1.75} />
+              <span
+                className={`whitespace-nowrap transition-opacity duration-200 motion-reduce:transition-none ${
+                  isVisuallyCollapsed ? "lg:opacity-0" : "opacity-100"
+                }`}
+              >
+                Pin sidebar
+              </span>
+            </>
+          ) : (
+            <>
+              <PanelLeftClose className="h-4 w-4 shrink-0" strokeWidth={1.75} />
+              <span className="whitespace-nowrap">Collapse sidebar</span>
+            </>
+          )}
+        </button>
 
-          <button
-            type="button"
-            onClick={onCloseMobile}
-            className="flex-1 rounded-lg border border-slate-700/80 bg-slate-900/70 px-2 py-1.5 font-mono text-[10px] text-slate-300 transition-colors hover:border-cyan-500/40 hover:text-cyan-200 lg:hidden cursor-pointer"
-          >
-            Close
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={onCloseMobile}
+          className="mt-2.5 w-full rounded-xl bg-black/[0.05] px-3 py-2 text-[13px] font-medium text-[#1D1D1F] transition-colors hover:bg-black/[0.08] lg:hidden cursor-pointer"
+        >
+          Close menu
+        </button>
       </div>
     </aside>
   );

@@ -17,47 +17,31 @@ import {
   ChartBoundary,
   ChartFrame,
   DataFallback,
+  GRAPH_COLORS,
   GRID_STROKE,
+  LEGEND_STYLE,
+  PALETTE,
   TOOLTIP_STYLE,
   formatBdtValue,
   formatDayCount,
 } from "@/components/charts/ChartShell";
 import { formatBdt, formatBdtCompact } from "@/utils/formatters";
 
-/**
- * Budget visualisations.
- *
- * Charts mount after hydration (Recharts measures its container and renders
- * nothing during SSR) and sit inside a boundary that falls back to a data table
- * if rendering fails.
- */
-
 const SPEND_COLORS = {
-  allocated: "#334155",
-  reported: "#22d3ee",
-  verified: "#10b981",
+  allocated: PALETTE.blue,
+  reported: PALETTE.orange,
+  verified: PALETTE.green,
 } as const;
 
 const STATUS_COLORS: Record<string, string> = {
-  Completed: "#10b981",
-  Active: "#22d3ee",
-  Planned: "#64748b",
-  Delayed: "#f59e0b",
-  Stalled: "#ef4444",
+  Completed: PALETTE.green,
+  Active: PALETTE.blue,
+  Planned: PALETTE.blue,
+  Delayed: PALETTE.orange,
+  Stalled: PALETTE.orange,
 };
 
-const CATEGORY_COLORS = [
-  "#22d3ee",
-  "#10b981",
-  "#f59e0b",
-  "#ef4444",
-  "#818cf8",
-  "#f472b6",
-];
-
-/* ------------------------------------------------------------------ */
-/* Allocation vs reported vs verified, per project                     */
-/* ------------------------------------------------------------------ */
+const CATEGORY_COLORS = GRAPH_COLORS;
 
 export interface SpendRow {
   code: string;
@@ -90,19 +74,15 @@ export function SpendComparisonChart({ data }: { data: SpendRow[] }) {
           />
           <YAxis type="category" dataKey="code" tick={AXIS_STYLE} stroke={GRID_STROKE} width={72} />
           <Tooltip contentStyle={TOOLTIP_STYLE} formatter={formatBdtValue} />
-          <Legend wrapperStyle={{ fontSize: 10, color: "#94a3b8" }} />
-          <Bar dataKey="allocated" name="Allocated" fill={SPEND_COLORS.allocated} radius={[0, 3, 3, 0]} />
-          <Bar dataKey="reported" name="Reported" fill={SPEND_COLORS.reported} radius={[0, 3, 3, 0]} />
-          <Bar dataKey="verified" name="Verified" fill={SPEND_COLORS.verified} radius={[0, 3, 3, 0]} />
+          <Legend wrapperStyle={LEGEND_STYLE} />
+          <Bar dataKey="allocated" name="Allocated" fill={SPEND_COLORS.allocated} radius={[0, 4, 4, 0]} />
+          <Bar dataKey="reported" name="Reported" fill={SPEND_COLORS.reported} radius={[0, 4, 4, 0]} />
+          <Bar dataKey="verified" name="Verified" fill={SPEND_COLORS.verified} radius={[0, 4, 4, 0]} />
         </BarChart>
       </ChartFrame>
     </ChartBoundary>
   );
 }
-
-/* ------------------------------------------------------------------ */
-/* Allocation by category                                              */
-/* ------------------------------------------------------------------ */
 
 export interface CategoryRow {
   label: string;
@@ -128,23 +108,24 @@ export function CategoryBudgetChart({ data }: { data: CategoryRow[] }) {
             innerRadius={54}
             outerRadius={92}
             paddingAngle={2}
-            stroke="#060b14"
+            stroke="#FFFFFF"
+            strokeWidth={2}
           >
             {data.map((entry, index) => (
-              <Cell key={entry.label} fill={CATEGORY_COLORS[index % CATEGORY_COLORS.length]} />
+              <Cell
+                key={entry.label}
+                fill={CATEGORY_COLORS[index % CATEGORY_COLORS.length]}
+                fillOpacity={index < CATEGORY_COLORS.length ? 1 : 0.62}
+              />
             ))}
           </Pie>
           <Tooltip contentStyle={TOOLTIP_STYLE} formatter={formatBdtValue} />
-          <Legend wrapperStyle={{ fontSize: 10, color: "#94a3b8" }} />
+          <Legend wrapperStyle={LEGEND_STYLE} />
         </PieChart>
       </ChartFrame>
     </ChartBoundary>
   );
 }
-
-/* ------------------------------------------------------------------ */
-/* Delivery status across projects                                     */
-/* ------------------------------------------------------------------ */
 
 export interface StatusRow {
   status: string;
@@ -164,9 +145,15 @@ export function ProjectStatusChart({ data }: { data: StatusRow[] }) {
           <XAxis dataKey="status" tick={AXIS_STYLE} stroke={GRID_STROKE} />
           <YAxis allowDecimals={false} tick={AXIS_STYLE} stroke={GRID_STROKE} />
           <Tooltip contentStyle={TOOLTIP_STYLE} />
-          <Bar dataKey="count" name="Projects" radius={[4, 4, 0, 0]}>
+          <Bar dataKey="count" name="Projects" radius={[6, 6, 0, 0]}>
             {data.map((entry) => (
-              <Cell key={entry.status} fill={STATUS_COLORS[entry.status] ?? "#64748b"} />
+              <Cell
+                key={entry.status}
+                fill={STATUS_COLORS[entry.status] ?? PALETTE.blue}
+                fillOpacity={
+                  entry.status === "Planned" ? 0.6 : entry.status === "Delayed" ? 0.72 : 1
+                }
+              />
             ))}
           </Bar>
         </BarChart>
@@ -174,10 +161,6 @@ export function ProjectStatusChart({ data }: { data: StatusRow[] }) {
     </ChartBoundary>
   );
 }
-
-/* ------------------------------------------------------------------ */
-/* Overdue days for delayed projects                                   */
-/* ------------------------------------------------------------------ */
 
 export interface OverdueRow {
   code: string;
@@ -196,16 +179,12 @@ export function OverdueDaysChart({ data }: { data: OverdueRow[] }) {
           <XAxis type="number" tick={AXIS_STYLE} stroke={GRID_STROKE} unit="d" />
           <YAxis type="category" dataKey="code" tick={AXIS_STYLE} stroke={GRID_STROKE} width={72} />
           <Tooltip contentStyle={TOOLTIP_STYLE} formatter={formatDayCount} />
-          <Bar dataKey="days" name="Days overdue" fill="#f59e0b" radius={[0, 3, 3, 0]} />
+          <Bar dataKey="days" name="Days overdue" fill={PALETTE.amber} radius={[0, 6, 6, 0]} />
         </BarChart>
       </ChartFrame>
     </ChartBoundary>
   );
 }
-
-/* ------------------------------------------------------------------ */
-/* Single project: where the money claim sits                          */
-/* ------------------------------------------------------------------ */
 
 export function ProjectSpendChart({
   allocated,
@@ -236,7 +215,7 @@ export function ProjectSpendChart({
             tickFormatter={(value: number) => formatBdtCompact(value)}
           />
           <Tooltip contentStyle={TOOLTIP_STYLE} formatter={formatBdtValue} />
-          <Bar dataKey="value" name="BDT" radius={[4, 4, 0, 0]}>
+          <Bar dataKey="value" name="BDT" radius={[6, 6, 0, 0]}>
             {data.map((entry) => (
               <Cell key={entry.label} fill={entry.fill} />
             ))}

@@ -34,10 +34,6 @@ const KIND_LABEL: Record<ResultKind, string> = {
   sector: "Sector",
 };
 
-/**
- * Built on the client from the server-supplied issue list (so citizen reports
- * are searchable) plus the static project and sector records.
- */
 function buildIndex(issues: SearchIssue[]): SearchResult[] {
   return [
     ...PROJECTS.map<SearchResult>((project) => ({
@@ -97,7 +93,6 @@ export default function GlobalSearch({ issues }: { issues: SearchIssue[] }) {
   const index = useMemo(() => buildIndex(issues), [issues]);
   const results = useMemo(() => searchResults(index, query), [index, query]);
 
-  // Global keyboard shortcut: ⌘K / Ctrl+K
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
@@ -109,7 +104,6 @@ export default function GlobalSearch({ issues }: { issues: SearchIssue[] }) {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  // Focus the field and lock background scroll while the palette is open.
   useEffect(() => {
     if (!open) return;
     const timer = window.setTimeout(() => inputRef.current?.focus(), 10);
@@ -157,21 +151,21 @@ export default function GlobalSearch({ issues }: { issues: SearchIssue[] }) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="group inline-flex w-full items-center gap-2 rounded-lg border border-slate-700/80 bg-slate-900/70 px-3 py-1.5 text-left transition-colors hover:border-cyan-400/50 hover:bg-slate-900 sm:w-64 cursor-pointer"
+        className="group inline-flex h-9 items-center gap-2 rounded-full border border-black/[0.08] bg-white/85 px-3.5 text-left shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-all hover:bg-white sm:w-64 cursor-pointer"
         aria-label="Search projects, issues and sectors"
       >
-        <Search className="h-3.5 w-3.5 shrink-0 text-slate-400 group-hover:text-cyan-300" />
-        <span className="flex-1 truncate font-mono text-[11px] text-slate-400">
-          Search civic records…
+        <Search className="h-3.5 w-3.5 shrink-0 text-[#86868B] group-hover:text-[#007AFF]" />
+        <span className="hidden flex-1 truncate text-[13px] text-[#6E6E73] sm:inline">
+          Search records…
         </span>
-        <kbd className="hidden shrink-0 rounded border border-slate-700 bg-slate-950 px-1.5 py-0.5 font-mono text-[10px] text-slate-500 sm:inline-block">
+        <kbd className="hidden shrink-0 rounded-md bg-black/[0.05] px-1.5 py-0.5 text-[11px] font-medium text-[#6E6E73] sm:inline-block">
           ⌘K
         </kbd>
       </button>
 
       {open ? (
         <div
-          className="fixed inset-0 z-50 flex items-start justify-center bg-[#02060d]/80 p-4 pt-[12vh] backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-start justify-center bg-black/20 p-4 pt-[12vh] backdrop-blur-[4px]"
           role="dialog"
           aria-modal="true"
           aria-label="Global search"
@@ -179,9 +173,9 @@ export default function GlobalSearch({ issues }: { issues: SearchIssue[] }) {
             if (event.target === event.currentTarget) close();
           }}
         >
-          <div className="ct-panel ct-panel-glow ct-fade-up w-full max-w-2xl overflow-hidden rounded-xl">
-            <div className="flex items-center gap-2 border-b border-slate-800 px-3 py-2.5">
-              <Search className="h-4 w-4 shrink-0 text-cyan-400" />
+          <div className="ct-glass ct-fade-up w-full max-w-xl overflow-hidden rounded-[22px]">
+            <div className="flex items-center gap-3 border-b border-black/[0.06] px-4 py-3.5">
+              <Search className="h-4 w-4 shrink-0 text-[#007AFF]" />
               <input
                 ref={inputRef}
                 value={query}
@@ -190,14 +184,14 @@ export default function GlobalSearch({ issues }: { issues: SearchIssue[] }) {
                   setActiveIndex(0);
                 }}
                 onKeyDown={onKeyDown}
-                placeholder="Search by project name, issue, code, sector or location…"
+                placeholder="Search by project, civic issue, code, or sector…"
                 aria-label="Search query"
-                className="w-full bg-transparent font-mono text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none"
+                className="w-full bg-transparent text-[15px] text-[#1D1D1F] placeholder:text-[#86868B] focus:outline-none"
               />
               <button
                 type="button"
                 onClick={close}
-                className="shrink-0 rounded p-1 text-slate-400 hover:bg-slate-800 hover:text-slate-200 cursor-pointer"
+                className="shrink-0 rounded-full p-1.5 text-[#6E6E73] transition-colors hover:bg-black/[0.06] hover:text-[#1D1D1F] cursor-pointer"
                 aria-label="Close search"
               >
                 <X className="h-4 w-4" />
@@ -206,45 +200,52 @@ export default function GlobalSearch({ issues }: { issues: SearchIssue[] }) {
 
             <div className="ct-scroll max-h-[52vh] overflow-y-auto p-2">
               {query.trim().length === 0 ? (
-                <p className="px-3 py-6 text-center font-mono text-[11px] text-slate-500">
-                  Search {index.length} records — projects, civic issues and
-                  sectors.
+                <p className="px-4 py-8 text-center text-[13px] text-[#6E6E73]">
+                  Search across {index.length} projects, civic issues, and sectors.
                 </p>
               ) : results.length === 0 ? (
-                <p className="px-3 py-6 text-center font-mono text-[11px] text-slate-500">
+                <p className="px-4 py-8 text-center text-[13px] text-[#6E6E73]">
                   No record matches “{query.trim()}”.
                 </p>
               ) : (
-                <ul role="listbox" aria-label="Search results">
-                  {results.map((result, index) => {
+                <ul role="listbox" aria-label="Search results" className="space-y-0.5">
+                  {results.map((result, idx) => {
                     const Icon = KIND_ICON[result.kind];
-                    const active = index === activeIndex;
+                    const active = idx === activeIndex;
                     return (
                       <li key={result.key}>
                         <button
                           type="button"
                           role="option"
                           aria-selected={active}
-                          onMouseEnter={() => setActiveIndex(index)}
+                          onMouseEnter={() => setActiveIndex(idx)}
                           onClick={() => go(result)}
-                          className={`flex w-full items-start gap-2.5 rounded-lg px-3 py-2 text-left transition-colors cursor-pointer ${
-                            active ? "bg-cyan-500/15 ring-1 ring-cyan-400/40" : "hover:bg-slate-800/60"
+                          className={`flex w-full items-start gap-3 rounded-[14px] px-3.5 py-2.5 text-left transition-colors cursor-pointer ${
+                            active ? "bg-[#007AFF]/[0.10]" : "hover:bg-black/[0.04]"
                           }`}
                         >
-                          <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-cyan-400" />
+                          <span
+                            className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${
+                              active
+                                ? "bg-[#007AFF] text-white"
+                                : "bg-black/[0.05] text-[#6E6E73]"
+                            }`}
+                          >
+                            <Icon className="h-3.5 w-3.5" />
+                          </span>
                           <span className="min-w-0 flex-1">
-                            <span className="flex flex-wrap items-center gap-1.5">
-                              <span className="font-mono text-[10px] font-semibold text-cyan-300">
+                            <span className="flex flex-wrap items-center gap-2">
+                              <span className="text-[12px] font-semibold text-[#0055CC] tabular-nums">
                                 {result.code}
                               </span>
-                              <span className="rounded border border-slate-700 px-1 font-mono text-[9px] text-slate-400 uppercase">
+                              <span className="rounded-full bg-black/[0.05] px-2 py-0.5 text-[11px] font-medium text-[#6E6E73]">
                                 {KIND_LABEL[result.kind]}
                               </span>
                             </span>
-                            <span className="mt-0.5 block truncate text-xs font-semibold text-slate-100">
+                            <span className="mt-0.5 block truncate text-[13.5px] font-semibold text-[#1D1D1F]">
                               {result.title}
                             </span>
-                            <span className="mt-0.5 block truncate font-mono text-[10px] text-slate-400">
+                            <span className="mt-0.5 block truncate text-[12px] text-[#6E6E73]">
                               {result.subtitle}
                             </span>
                           </span>
@@ -256,9 +257,13 @@ export default function GlobalSearch({ issues }: { issues: SearchIssue[] }) {
               )}
             </div>
 
-            <div className="flex items-center justify-between gap-2 border-t border-slate-800 px-3 py-1.5 font-mono text-[10px] text-slate-500">
-              <span>↑ ↓ to move · ↵ to open · esc to close</span>
-              <span>{results.length > 0 ? `${results.length} match${results.length === 1 ? "" : "es"}` : ""}</span>
+            <div className="flex items-center justify-between gap-2 border-t border-black/[0.06] bg-black/[0.02] px-4 py-2 text-[11.5px] text-[#6E6E73]">
+              <span>Arrow keys to navigate · Enter to open · Esc to close</span>
+              <span className="tabular-nums">
+                {results.length > 0
+                  ? `${results.length} match${results.length === 1 ? "" : "es"}`
+                  : ""}
+              </span>
             </div>
           </div>
         </div>

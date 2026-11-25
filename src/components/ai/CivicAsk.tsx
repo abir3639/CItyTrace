@@ -11,14 +11,9 @@ import {
   Sparkles,
 } from "lucide-react";
 import { Panel, PanelHeader } from "@/components/ui/Panel";
+import { DemoBadge } from "@/components/ui/Badge";
 import { SUGGESTED_QUESTIONS, type AskAnswer } from "@/lib/ask";
 
-/**
- * Civic Q&A.
- *
- * Answers come from `/api/ask`, which always produces a grounded answer from
- * the dataset — Gemini only rephrases it when a key is configured.
- */
 export default function CivicAsk() {
   const [question, setQuestion] = useState("");
   const [history, setHistory] = useState<AskAnswer[]>([]);
@@ -62,16 +57,12 @@ export default function CivicAsk() {
   };
 
   return (
-    <Panel glow className="flex flex-col gap-3 p-4">
+    <Panel glow className="flex flex-col gap-4 p-5">
       <PanelHeader
-        title="Ask the civic record"
-        description="Questions are answered from the stored dataset only — every figure comes from a record you can open."
-        icon={<MessageSquare className="h-3.5 w-3.5" />}
-        actions={
-          <span className="rounded border border-amber-400/30 bg-amber-500/10 px-2 py-0.5 font-mono text-[9px] font-semibold tracking-wider text-amber-200 uppercase">
-            Simulated data
-          </span>
-        }
+        title="Ask the Civic Record"
+        description="Answers are grounded strictly in the stored project and issue dataset."
+        icon={<MessageSquare className="h-4 w-4" />}
+        actions={<DemoBadge label="Simulated data" />}
       />
 
       <form
@@ -79,32 +70,32 @@ export default function CivicAsk() {
           event.preventDefault();
           void ask(question);
         }}
-        className="flex flex-wrap items-center gap-2"
+        className="flex flex-wrap items-center gap-2.5"
       >
-        <label className="flex min-w-[240px] flex-1 items-center gap-2 rounded-lg border border-slate-800 bg-[#07101d] px-2.5 py-2 focus-within:border-cyan-500/60">
-          <Sparkles className="h-3.5 w-3.5 shrink-0 text-cyan-400" />
+        <label className="flex min-w-[240px] flex-1 items-center gap-2.5 rounded-full border border-black/[0.08] bg-[#F5F5F7] px-4 py-2.5 transition-colors focus-within:border-[#007AFF] focus-within:bg-white">
+          <Sparkles className="h-4 w-4 shrink-0 text-[#007AFF]" />
           <input
             value={question}
             onChange={(event) => setQuestion(event.target.value)}
             placeholder="e.g. Why has the link road been repaired three times?"
             aria-label="Ask a civic question"
             maxLength={300}
-            className="w-full bg-transparent font-mono text-[12px] text-slate-100 placeholder:text-slate-500 focus:outline-none"
+            className="w-full bg-transparent text-[14px] text-[#1D1D1F] placeholder:text-[#86868B] focus:outline-none"
           />
-          <CornerDownLeft className="h-3 w-3 shrink-0 text-slate-600" />
+          <CornerDownLeft className="h-3.5 w-3.5 shrink-0 text-[#86868B]" />
         </label>
         <button
           type="submit"
           disabled={loading}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-300/60 bg-gradient-to-r from-cyan-500 to-sky-500 px-3.5 py-2 font-mono text-[11px] font-bold tracking-wider text-slate-950 uppercase shadow-[0_0_20px_-6px_rgba(34,211,238,0.7)] transition-all hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer"
+          className="inline-flex items-center gap-2 rounded-full bg-[#007AFF] px-5 py-2.5 text-[13.5px] font-semibold text-white shadow-[0_2px_8px_-2px_rgba(0,122,255,0.45)] transition-all hover:bg-[#0066D6] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer"
         >
           {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-          {loading ? "Reading record…" : "Ask"}
+          {loading ? "Analyzing…" : "Ask"}
         </button>
       </form>
 
       <div className="flex flex-wrap items-center gap-1.5">
-        <span className="font-mono text-[9px] tracking-wider text-slate-500 uppercase">Try</span>
+        <span className="mr-1 text-[12px] font-medium text-[#6E6E73]">Suggested</span>
         {SUGGESTED_QUESTIONS.map((suggestion) => (
           <button
             key={suggestion}
@@ -113,7 +104,7 @@ export default function CivicAsk() {
               setQuestion(suggestion);
               void ask(suggestion);
             }}
-            className="rounded-full border border-slate-700 px-2 py-0.5 font-mono text-[10px] text-slate-300 transition-colors hover:border-cyan-500/50 hover:text-cyan-200 cursor-pointer"
+            className="rounded-full bg-[#F0F2F5] px-3 py-1 text-[12px] font-medium text-[#48484A] transition-colors hover:bg-black/[0.08] hover:text-[#1D1D1F] cursor-pointer"
           >
             {suggestion}
           </button>
@@ -121,57 +112,53 @@ export default function CivicAsk() {
       </div>
 
       {error ? (
-        <p className="flex items-start gap-1.5 rounded-lg border border-red-500/40 bg-red-950/30 px-2.5 py-2 text-[11px] text-red-200">
-          <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+        <p className="flex items-start gap-2 rounded-[14px] border border-[#FF3B30]/20 bg-[#FF3B30]/[0.08] px-3.5 py-2.5 text-[13px] text-[#C9241B]">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
           {error}
         </p>
       ) : null}
 
       {history.length === 0 && !loading ? (
-        <p className="rounded-lg border border-dashed border-slate-700/80 bg-slate-950/30 px-3 py-6 text-center font-mono text-[10px] leading-relaxed text-slate-500">
-          No question asked yet. Every answer is assembled from the project and
-          issue records — nothing is generated from outside the dataset.
+        <p className="rounded-[16px] bg-[#F5F5F7] px-4 py-7 text-center text-[13px] text-[#6E6E73]">
+          Ask a question or pick a prompt above. Every answer links directly to its source records.
         </p>
       ) : null}
 
-      <ul className="flex flex-col gap-2">
+      <ul className="flex flex-col gap-3">
         {history.map((entry, index) => (
           <li
             key={`${entry.question}-${index}`}
-            className="ct-fade-up rounded-lg border border-slate-800 bg-[#08101d] p-3"
+            className="ct-fade-up rounded-[16px] border border-black/[0.06] bg-[#F9FAFB] p-4"
           >
             <div className="flex flex-wrap items-start justify-between gap-2">
-              <p className="text-[11px] font-semibold text-slate-200">
-                <span className="mr-1.5 font-mono text-[10px] text-cyan-400">Q</span>
+              <p className="text-[13.5px] font-semibold text-[#1D1D1F]">
                 {entry.question}
               </p>
               <span
-                className={`rounded-full border px-2 py-0.5 font-mono text-[9px] font-semibold uppercase ${
+                className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium ${
                   entry.source === "gemini"
-                    ? "border-cyan-400/45 bg-cyan-500/15 text-cyan-200"
-                    : "border-slate-600/60 bg-slate-500/15 text-slate-300"
+                    ? "bg-[#007AFF]/[0.1] text-[#0055CC]"
+                    : "bg-black/[0.05] text-[#6E6E73]"
                 }`}
               >
-                {entry.source === "gemini" ? "Gemini · live" : "Rules engine"}
+                {entry.source === "gemini" ? "Gemini live" : "Rules engine"}
               </span>
             </div>
 
-            <p className="mt-1.5 text-[12px] leading-relaxed text-slate-100">{entry.answer}</p>
+            <p className="mt-2 text-[13.5px] leading-relaxed text-[#1D1D1F]">{entry.answer}</p>
 
             {entry.citations.length > 0 ? (
-              <div className="mt-2 border-t border-slate-800/80 pt-1.5">
-                <p className="font-mono text-[9px] tracking-wider text-slate-500 uppercase">
-                  Sources
-                </p>
-                <ul className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
+              <div className="mt-3 border-t border-black/[0.05] pt-2.5">
+                <p className="text-[11.5px] font-medium text-[#6E6E73]">Sources</p>
+                <ul className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">
                   {entry.citations.map((citation) => (
                     <li key={citation.href}>
                       <Link
                         href={citation.href}
-                        className="inline-flex items-center gap-1 font-mono text-[10px] text-cyan-300 hover:text-cyan-100"
+                        className="inline-flex items-center gap-1 text-[12.5px] font-medium text-[#007AFF] hover:underline"
                       >
                         {citation.label}
-                        <ArrowUpRight className="h-2.5 w-2.5" />
+                        <ArrowUpRight className="h-3 w-3" />
                       </Link>
                     </li>
                   ))}

@@ -27,23 +27,27 @@ export function StatCard({
 
   const body = (
     <>
-      <div className="flex items-start justify-between gap-2">
-        <p className="font-mono text-[10px] font-semibold tracking-[0.14em] text-slate-400 uppercase">
-          {label}
-        </p>
-        {icon ? <span className={style.label}>{icon}</span> : null}
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[13px] font-medium text-[#6E6E73]">{label}</p>
+        {icon ? (
+          <span className={`flex h-7 w-7 items-center justify-center rounded-full bg-[#F5F5F7] ${style.label}`}>
+            {icon}
+          </span>
+        ) : null}
       </div>
-      <p className={`mt-2 font-mono text-2xl font-bold tracking-tight ${style.text}`}>
+      <p className="mt-2.5 text-[28px] font-semibold tracking-[-0.03em] leading-none text-[#1D1D1F] tabular-nums">
         {value}
       </p>
       {hint ? (
-        <p className="mt-1 text-[11px] leading-snug text-slate-400">{hint}</p>
+        <p className="mt-2 text-[12px] leading-snug text-[#6E6E73]">{hint}</p>
       ) : null}
     </>
   );
 
-  const shared = `ct-panel flex flex-col rounded-xl px-4 py-3.5 transition-colors ${
-    href ? "hover:border-cyan-400/50 hover:bg-[#0c182b]" : ""
+  const shared = `ct-surface flex flex-col rounded-[20px] p-5 transition-all duration-200 ${
+    href
+      ? "hover:-translate-y-0.5 hover:shadow-[0_12px_28px_-12px_rgba(15,23,42,0.16)] active:scale-[0.99]"
+      : ""
   }`;
 
   if (href) {
@@ -84,12 +88,12 @@ export function ProgressBar({
   const width = clampPercent(value);
   return (
     <div
-      className={`h-2 w-full overflow-hidden rounded-full bg-slate-800 ${className}`}
+      className={`h-2 w-full overflow-hidden rounded-full bg-black/[0.06] ${className}`}
       role="img"
       aria-label={label ?? `${width.toFixed(0)} percent`}
     >
       <div
-        className={`h-full rounded-full transition-all duration-500 ${TONES[tone].bar}`}
+        className={`h-full rounded-full transition-all duration-300 ${TONES[tone].bar}`}
         style={{ width: `${width}%` }}
       />
     </div>
@@ -99,9 +103,9 @@ export function ProgressBar({
 /**
  * Budget bar that makes the evidence gap visible.
  *
- * Emerald  = spend backed by independent evidence
- * Hatched  = reported spend with no verified evidence behind it
- * Empty    = unspent allocation
+ * Green   = spend backed by independent evidence
+ * Hatched = reported spend with no verified evidence behind it
+ * Empty   = unspent allocation
  */
 export function SpendBar({
   allocated,
@@ -122,13 +126,13 @@ export function SpendBar({
 
   return (
     <div
-      className={`relative w-full overflow-hidden rounded-full bg-slate-800/90 ${height}`}
+      className={`relative w-full overflow-hidden rounded-full bg-[#E9ECF0] ${height}`}
       role="img"
       aria-label={`Reported spend ${reportedPct.toFixed(0)}% of allocation, ${verifiedLabel}`}
     >
       <div className="ct-hatch absolute inset-y-0 left-0" style={{ width: `${reportedPct}%` }} />
       <div
-        className="absolute inset-y-0 left-0 rounded-l-full bg-emerald-400"
+        className="absolute inset-y-0 left-0 rounded-l-full bg-[#34C759]"
         style={{ width: `${verifiedPct}%` }}
       />
     </div>
@@ -156,12 +160,12 @@ export function EmptyState({
 }: EmptyStateProps) {
   return (
     <div
-      className={`flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-slate-700/80 bg-slate-950/30 px-6 py-12 text-center ${className}`}
+      className={`flex flex-col items-center justify-center gap-3 rounded-[18px] border border-black/[0.06] bg-[#F5F5F7]/70 px-6 py-10 text-center ${className}`}
     >
-      {icon ? <span className="text-slate-500">{icon}</span> : null}
+      {icon ? <span className="text-[#86868B]">{icon}</span> : null}
       <div>
-        <p className="text-sm font-semibold text-slate-200">{title}</p>
-        <p className="mx-auto mt-1 max-w-sm text-xs leading-relaxed text-slate-400">
+        <p className="text-[14px] font-semibold text-[#1D1D1F]">{title}</p>
+        <p className="mx-auto mt-1 max-w-sm text-[13px] leading-relaxed text-[#6E6E73]">
           {description}
         </p>
       </div>
@@ -184,13 +188,11 @@ export function KeyValue({
   tone?: Tone;
 }) {
   return (
-    <div className="flex items-baseline justify-between gap-3 py-1">
-      <dt className="font-mono text-[10px] tracking-wider text-slate-400 uppercase">
-        {label}
-      </dt>
+    <div className="flex items-baseline justify-between gap-3 border-b border-black/[0.045] py-2 last:border-0">
+      <dt className="text-[12.5px] text-[#6E6E73]">{label}</dt>
       <dd
-        className={`text-right font-mono text-[11px] font-semibold ${
-          tone ? TONES[tone].text : "text-slate-200"
+        className={`text-right text-[13px] font-medium tabular-nums ${
+          tone ? TONES[tone].text : "text-[#1D1D1F]"
         }`}
       >
         {value}

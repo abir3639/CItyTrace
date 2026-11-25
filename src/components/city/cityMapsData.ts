@@ -13,6 +13,7 @@ export type CityRenderMode = "twin" | "heatmap" | "xray";
 export interface CityMapConfig {
   id: CityMapId;
   code: string;
+  shortLabel: string;
   title: string;
   subtitle: string;
   /** Sectors highlighted on this map. Empty means all six sectors. */
@@ -26,47 +27,51 @@ export interface CityMapConfig {
 export const CITY_MAPS: CityMapConfig[] = [
   {
     id: "metro-twin",
-    code: "MAP 01",
+    code: "Map 01",
+    shortLabel: "Metro Twin",
     title: "Dhaka Metro Twin",
-    subtitle: "All 6 sectors · full 42×42 urban grid",
+    subtitle: "All 6 sectors · full district grid",
     sectors: [],
     cameraPos: [16.5, 13.5, 18.0],
     cameraTarget: [0, 0.4, 0],
     groundSize: 42,
-    highlightNote: "Full district twin with elevated Metro viaduct, canal, parks & 96 buildings.",
+    highlightNote: "Six-sector district model with elevated Metro, storm canal, and landmarks",
   },
   {
     id: "arterial-engineering",
-    code: "MAP 02",
+    code: "Map 02",
+    shortLabel: "Arterial",
     title: "Arterial & Sub-base Cutaway",
     subtitle: "S04 & S06 · Link Road & Civic Core",
     sectors: ["S04", "S06"],
     cameraPos: [7.8, 7.6, 9.2],
     cameraTarget: [-0.2, 0.35, 0.8],
     groundSize: 42,
-    highlightNote: "Sub-base failure zones, utility clashes & 3× resurfaced arterial corridor.",
+    highlightNote: "Sub-base failure zones, utility clashes & recurring arterial repairs",
   },
   {
     id: "hydrology-basin",
-    code: "MAP 03",
+    code: "Map 03",
+    shortLabel: "Hydrology",
     title: "Monsoon Canal & Floodplain",
     subtitle: "S02 & S09 · Canal West & South Market",
     sectors: ["S02", "S09"],
     cameraPos: [-1.2, 9.0, 4.5],
     cameraTarget: [-3.5, 0.3, -4.4],
     groundSize: 42,
-    highlightNote: "Western storm canal, box-culvert outfall, pump bay & monsoon waterlogging basins.",
+    highlightNote: "Western storm canal, box-culvert outfall & monsoon retention basins",
   },
   {
     id: "smart-corridor",
-    code: "MAP 04",
+    code: "Map 04",
+    shortLabel: "Smart Grid",
     title: "Smart Grid & Civic Campus",
     subtitle: "S11 & S07 · East Blvd & North Gate",
     sectors: ["S11", "S07"],
     cameraPos: [10.8, 8.8, 8.6],
     cameraTarget: [2.4, 0.35, 1.2],
     groundSize: 42,
-    highlightNote: "48 underground LED luminaires, school safety zone & North Gate market transfer.",
+    highlightNote: "Underground smart LED corridor, school safety zone & market depot",
   },
 ];
 
@@ -536,7 +541,7 @@ export const UTILITY_CONDUITS: UtilityConduit[] = [
       [-0.2, 1.4],
     ],
     radius: 0.11,
-    color: "#ef4444",
+    color: "#FF3B30",
   },
   {
     id: "util-canal-culvert",
@@ -548,7 +553,7 @@ export const UTILITY_CONDUITS: UtilityConduit[] = [
       [-6.2, 1.2],
     ],
     radius: 0.16,
-    color: "#f59e0b",
+    color: "#FF9500",
   },
   {
     id: "util-water-cw",
@@ -561,7 +566,7 @@ export const UTILITY_CONDUITS: UtilityConduit[] = [
       [-3.5, -1.2],
     ],
     radius: 0.09,
-    color: "#38bdf8",
+    color: "#007AFF",
   },
   {
     id: "util-fiber-clash",
@@ -574,7 +579,7 @@ export const UTILITY_CONDUITS: UtilityConduit[] = [
       [4.5, -1.2],
     ],
     radius: 0.06,
-    color: "#a855f7",
+    color: "#AF52DE",
   },
   {
     id: "util-led-duct",
@@ -586,7 +591,7 @@ export const UTILITY_CONDUITS: UtilityConduit[] = [
       [5.9, 7.2],
     ],
     radius: 0.08,
-    color: "#10b981",
+    color: "#34C759",
   },
 ];
 
@@ -607,7 +612,7 @@ export const HEATMAP_ZONES: HeatmapZone[] = [
     x: -1.6,
     z: 1.7,
     radius: 2.6,
-    color: "#ef4444",
+    color: "#FF3B30",
     intensity: 0.9,
   },
   {
@@ -616,7 +621,7 @@ export const HEATMAP_ZONES: HeatmapZone[] = [
     x: -7.1,
     z: -3.6,
     radius: 3.1,
-    color: "#f59e0b",
+    color: "#FF9500",
     intensity: 0.85,
   },
   {
@@ -625,7 +630,7 @@ export const HEATMAP_ZONES: HeatmapZone[] = [
     x: 0.8,
     z: -0.5,
     radius: 2.1,
-    color: "#ef4444",
+    color: "#FF3B30",
     intensity: 0.75,
   },
   {
@@ -634,7 +639,7 @@ export const HEATMAP_ZONES: HeatmapZone[] = [
     x: -2.2,
     z: 5.7,
     radius: 2.2,
-    color: "#f59e0b",
+    color: "#FF9500",
     intensity: 0.65,
   },
   {
@@ -643,7 +648,7 @@ export const HEATMAP_ZONES: HeatmapZone[] = [
     x: 6.4,
     z: -1.4,
     radius: 2.4,
-    color: "#10b981",
+    color: "#34C759",
     intensity: 0.6,
   },
 ];

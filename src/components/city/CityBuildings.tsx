@@ -13,12 +13,14 @@ import {
 } from "./cityMapsData";
 
 /* ------------------------------------------------------------------ */
-/* Module-level procedural window facade textures                      */
+/* Module-level architectural daylight facade textures                 */
 /* ------------------------------------------------------------------ */
 
 const facadeTextureCache = new Map<string, THREE.CanvasTexture>();
 
-function getFacadeTexture(variant: "cyan" | "warm" | "civic"): THREE.CanvasTexture | null {
+function getDaylightFacadeTexture(
+  variant: "limestone" | "warm-stone" | "civic-glass"
+): THREE.CanvasTexture | null {
   if (typeof document === "undefined") return null;
   const cached = facadeTextureCache.get(variant);
   if (cached) return cached;
@@ -29,34 +31,32 @@ function getFacadeTexture(variant: "cyan" | "warm" | "civic"): THREE.CanvasTextu
   const ctx = canvas.getContext("2d");
   if (!ctx) return null;
 
-  ctx.fillStyle = "#030712";
+  ctx.fillStyle =
+    variant === "civic-glass"
+      ? "#EEF3F9"
+      : variant === "warm-stone"
+        ? "#F6F5F2"
+        : "#F7F8FA";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  const litColors =
-    variant === "warm"
-      ? ["#fbbf24", "#38bdf8", "#94a3b8", "#f59e0b"]
-      : variant === "civic"
-        ? ["#22d3ee", "#34d399", "#7dd3fc", "#0ea5e9"]
-        : ["#38bdf8", "#22d3ee", "#64748b", "#bae6fd"];
+  const windowColors =
+    variant === "civic-glass"
+      ? ["#AEC4DE", "#BFD2E8", "#9DB7D4"]
+      : variant === "warm-stone"
+        ? ["#C8CFD8", "#D7DDE6", "#BCC5D1"]
+        : ["#C2CCD9", "#D3DBE6", "#B4C0CE"];
 
-  let seed = variant === "warm" ? 17 : variant === "civic" ? 43 : 71;
+  let seed = variant === "warm-stone" ? 19 : variant === "civic-glass" ? 41 : 73;
   const nextRand = () => {
     seed = (seed * 1103515245 + 12345) & 0x7fffffff;
     return (seed % 100) / 100;
   };
 
-  for (let row = 4; row < 124; row += 10) {
+  for (let row = 5; row < 123; row += 10) {
     for (let col = 4; col < 60; col += 9) {
-      const r = nextRand();
-      if (r > 0.36) {
-        ctx.fillStyle = litColors[Math.floor(nextRand() * litColors.length)];
-        ctx.globalAlpha = 0.45 + nextRand() * 0.5;
-        ctx.fillRect(col, row, 5, 6);
-      } else {
-        ctx.fillStyle = "#0f172a";
-        ctx.globalAlpha = 0.65;
-        ctx.fillRect(col, row, 5, 6);
-      }
+      ctx.fillStyle = windowColors[Math.floor(nextRand() * windowColors.length)];
+      ctx.globalAlpha = 0.72 + nextRand() * 0.2;
+      ctx.fillRect(col, row, 5, 6);
     }
   }
   ctx.globalAlpha = 1;
@@ -66,12 +66,13 @@ function getFacadeTexture(variant: "cyan" | "warm" | "civic"): THREE.CanvasTextu
   texture.wrapT = THREE.RepeatWrapping;
   texture.magFilter = THREE.NearestFilter;
   texture.minFilter = THREE.LinearFilter;
+  texture.colorSpace = THREE.SRGBColorSpace;
   facadeTextureCache.set(variant, texture);
   return texture;
 }
 
 /* ------------------------------------------------------------------ */
-/* Architecturally varied Dhaka buildings & clickable landmarks         */
+/* Soft off-white Dhaka architectural buildings & civic landmarks      */
 /* ------------------------------------------------------------------ */
 
 export const DetailedBuilding = memo(function DetailedBuilding({
@@ -111,66 +112,63 @@ export const DetailedBuilding = memo(function DetailedBuilding({
     if (renderMode !== "twin" || !isEmphasized) return null;
     const variant =
       b.tone === "landmark" || b.tone === "civic"
-        ? "civic"
+        ? "civic-glass"
         : b.archetype === "dhaka-apartment"
-          ? "warm"
-          : "cyan";
-    return getFacadeTexture(variant);
+          ? "warm-stone"
+          : "limestone";
+    return getDaylightFacadeTexture(variant);
   }, [renderMode, isEmphasized, b.tone, b.archetype]);
 
   const fillColor =
     b.tone === "landmark"
-      ? "#153252"
+      ? "#FFFFFF"
       : b.tone === "civic"
-        ? "#132944"
+        ? "#F4F7FB"
         : b.tone === "primary"
-          ? "#0e2038"
-          : "#0a1729";
+          ? "#F8F9FB"
+          : "#F2F4F7";
+
   const roofColor =
     isSelectedLandmark || hovered
-      ? "#0891b2"
-      : b.edgeGlow
-        ? "#173c5e"
-        : "#11243c";
+      ? "#007AFF"
+      : b.tone === "landmark"
+        ? "#E4ECF7"
+        : "#E5E9F0";
 
   const bodyOpacity =
     renderMode === "xray"
       ? isEmphasized
-        ? 0.16
-        : 0.08
+        ? 0.22
+        : 0.12
       : renderMode === "heatmap"
         ? isEmphasized
-          ? 0.36
-          : 0.18
+          ? 0.48
+          : 0.25
         : isEmphasized
           ? 1
-          : 0.32;
+          : 0.36;
 
   const isTransparent = bodyOpacity < 1;
   const edgeColor =
     isSelectedLandmark || hovered
-      ? "#38bdf8"
+      ? "#007AFF"
       : b.tone === "landmark"
-        ? "#22d3ee"
-        : b.edgeGlow
-          ? "#22d3ee"
-          : "#1e3a5f";
+        ? "#93B4DC"
+        : "#CBD3DF";
   const edgeOpacity =
     renderMode === "xray"
       ? isEmphasized
-        ? 0.42
-        : 0.18
+        ? 0.55
+        : 0.25
       : isSelectedLandmark || hovered
         ? 0.95
         : isEmphasized
-          ? b.edgeGlow
-            ? 0.55
-            : 0.3
-          : 0.15;
+          ? 0.55
+          : 0.25;
 
   const hasSetback =
     b.archetype === "highrise-stepped" || b.archetype === "civic-tower";
-  const setbackH = hasSetback ? Math.min(0.65, b.h * 0.28) : 0;
+  const setbackH = hasSetback ? Math.min(0.62, b.h * 0.26) : 0;
 
   return (
     <group
@@ -199,11 +197,11 @@ export const DetailedBuilding = memo(function DetailedBuilding({
           : undefined
       }
     >
-      {/* Ground podium plinth */}
-      <mesh position={[0, 0.09, 0]}>
-        <boxGeometry args={[b.w * 1.07, 0.18, b.d * 1.07]} />
+      {/* Subtle architectural plinth */}
+      <mesh position={[0, 0.07, 0]} receiveShadow>
+        <boxGeometry args={[b.w * 1.06, 0.14, b.d * 1.06]} />
         <meshStandardMaterial
-          color="#091525"
+          color="#E2E7EE"
           roughness={0.85}
           transparent={isTransparent}
           opacity={bodyOpacity}
@@ -211,40 +209,30 @@ export const DetailedBuilding = memo(function DetailedBuilding({
         />
       </mesh>
 
-      {/* Main tower body */}
-      <mesh position={[0, b.h / 2, 0]}>
+      {/* Main building mass */}
+      <mesh position={[0, b.h / 2, 0]} castShadow={isEmphasized && !isTransparent} receiveShadow>
         <boxGeometry args={[b.w, b.h, b.d]} />
         <meshStandardMaterial
           color={fillColor}
-          roughness={0.74}
-          metalness={0.24}
-          emissive={
-            isSelectedLandmark
-              ? "#06b6d4"
-              : facadeTex
-                ? "#ffffff"
-                : b.tone === "landmark"
-                  ? "#083344"
-                  : "#000000"
-          }
-          emissiveMap={facadeTex}
-          emissiveIntensity={
-            isSelectedLandmark ? 0.45 : facadeTex ? 0.58 : b.tone === "landmark" ? 0.3 : 0
-          }
+          map={facadeTex}
+          roughness={0.72}
+          metalness={0.04}
+          emissive={isSelectedLandmark ? "#007AFF" : "#000000"}
+          emissiveIntensity={isSelectedLandmark ? 0.12 : 0}
           transparent={isTransparent}
           opacity={bodyOpacity}
           depthWrite={!isTransparent}
         />
       </mesh>
 
-      {/* Stepped upper setback tier for tall Dhaka towers */}
+      {/* Stepped upper setback tier */}
       {hasSetback && renderMode !== "xray" ? (
-        <mesh position={[0, b.h + setbackH / 2, 0]}>
+        <mesh position={[0, b.h + setbackH / 2, 0]} castShadow={isEmphasized && !isTransparent} receiveShadow>
           <boxGeometry args={[b.w * 0.68, setbackH, b.d * 0.68]} />
           <meshStandardMaterial
-            color={roofColor}
-            roughness={0.62}
-            metalness={0.28}
+            color="#FFFFFF"
+            roughness={0.68}
+            metalness={0.05}
             transparent={isTransparent}
             opacity={bodyOpacity}
             depthWrite={!isTransparent}
@@ -252,33 +240,27 @@ export const DetailedBuilding = memo(function DetailedBuilding({
         </mesh>
       ) : null}
 
-      {/* Horizontal balcony / cornice bands on Dhaka apartments */}
+      {/* Balcony cornice bands on residential apartments */}
       {b.archetype === "dhaka-apartment" && b.h >= 1.7 && renderMode === "twin" ? (
         <mesh position={[0, b.h * 0.52, 0]}>
-          <boxGeometry args={[b.w * 1.05, 0.06, b.d * 1.05]} />
+          <boxGeometry args={[b.w * 1.04, 0.05, b.d * 1.04]} />
           <meshStandardMaterial
-            color="#1e3a5f"
-            roughness={0.7}
+            color="#DCE2EC"
+            roughness={0.75}
             transparent={isTransparent}
             opacity={bodyOpacity}
           />
         </mesh>
       ) : null}
 
-      {/* Roof cap */}
-      <mesh position={[0, b.h + setbackH + 0.035, 0]}>
-        <boxGeometry args={[b.w * (hasSetback ? 0.6 : 0.86), 0.07, b.d * (hasSetback ? 0.6 : 0.86)]} />
+      {/* Clean roof cap */}
+      <mesh position={[0, b.h + setbackH + 0.03, 0]} receiveShadow>
+        <boxGeometry
+          args={[b.w * (hasSetback ? 0.6 : 0.88), 0.06, b.d * (hasSetback ? 0.6 : 0.88)]}
+        />
         <meshStandardMaterial
           color={roofColor}
-          emissive={
-            isSelectedLandmark || hovered
-              ? "#22d3ee"
-              : b.edgeGlow
-                ? "#083344"
-                : "#000000"
-          }
-          emissiveIntensity={isSelectedLandmark || hovered ? 1.15 : b.edgeGlow ? 0.55 : 0}
-          roughness={0.58}
+          roughness={0.65}
           transparent={isTransparent}
           opacity={bodyOpacity}
           depthWrite={!isTransparent}
@@ -287,70 +269,57 @@ export const DetailedBuilding = memo(function DetailedBuilding({
 
       {/* Rooftop architectural details */}
       {renderMode === "twin" && isEmphasized && b.roofFeature === "water-tank" ? (
-        <group position={[b.w * 0.16, b.h + setbackH + 0.16, b.d * 0.12]}>
-          <mesh>
-            <cylinderGeometry args={[0.1, 0.1, 0.18, 8]} />
-            <meshStandardMaterial color="#1e293b" metalness={0.5} roughness={0.4} />
+        <group position={[b.w * 0.16, b.h + setbackH + 0.15, b.d * 0.12]}>
+          <mesh castShadow>
+            <cylinderGeometry args={[0.095, 0.095, 0.17, 10]} />
+            <meshStandardMaterial color="#8E9AA9" metalness={0.15} roughness={0.55} />
           </mesh>
-          <mesh position={[-0.24, 0, 0]}>
-            <cylinderGeometry args={[0.08, 0.08, 0.16, 8]} />
-            <meshStandardMaterial color="#0f172a" metalness={0.4} roughness={0.5} />
+          <mesh position={[-0.22, 0, 0]} castShadow>
+            <cylinderGeometry args={[0.075, 0.075, 0.15, 10]} />
+            <meshStandardMaterial color="#A3AEBD" metalness={0.15} roughness={0.6} />
           </mesh>
         </group>
       ) : null}
 
       {renderMode === "twin" && isEmphasized && b.roofFeature === "solar" ? (
-        <mesh
-          position={[0, b.h + setbackH + 0.11, 0]}
-          rotation={[-0.18, 0, 0]}
-        >
-          <boxGeometry args={[b.w * 0.54, 0.04, b.d * 0.48]} />
-          <meshStandardMaterial
-            color="#0ea5e9"
-            emissive="#0284c7"
-            emissiveIntensity={0.4}
-            roughness={0.25}
-            metalness={0.6}
-          />
+        <mesh position={[0, b.h + setbackH + 0.1, 0]} rotation={[-0.16, 0, 0]} castShadow>
+          <boxGeometry args={[b.w * 0.52, 0.035, b.d * 0.46]} />
+          <meshStandardMaterial color="#3B6EA5" roughness={0.3} metalness={0.35} />
         </mesh>
       ) : null}
 
       {renderMode === "twin" && isEmphasized && b.roofFeature === "spire" ? (
-        <mesh position={[0, b.h + setbackH + 0.35, 0]}>
-          <cylinderGeometry args={[0.015, 0.03, 0.6, 6]} />
-          <meshStandardMaterial color="#22d3ee" emissive="#22d3ee" emissiveIntensity={1.2} />
+        <mesh position={[0, b.h + setbackH + 0.32, 0]}>
+          <cylinderGeometry args={[0.014, 0.028, 0.55, 8]} />
+          <meshStandardMaterial color="#8E9AA9" metalness={0.4} roughness={0.35} />
         </mesh>
       ) : null}
 
       {renderMode === "twin" && isEmphasized && b.roofFeature === "helipad" ? (
-        <mesh
-          rotation={[-Math.PI / 2, 0, 0]}
-          position={[0, b.h + setbackH + 0.08, 0]}
-        >
-          <ringGeometry args={[0.22, 0.3, 18]} />
-          <meshBasicMaterial color="#38bdf8" transparent opacity={0.85} />
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, b.h + setbackH + 0.07, 0]}>
+          <ringGeometry args={[0.22, 0.29, 20]} />
+          <meshBasicMaterial color="#007AFF" transparent opacity={0.75} />
         </mesh>
       ) : null}
 
       {b.roofFeature === "dome" ? (
-        <group position={[0, b.h + 0.08, 0]}>
-          <mesh>
-            <sphereGeometry args={[Math.min(b.w, b.d) * 0.32, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2]} />
+        <group position={[0, b.h + 0.06, 0]}>
+          <mesh castShadow>
+            <sphereGeometry
+              args={[Math.min(b.w, b.d) * 0.31, 14, 10, 0, Math.PI * 2, 0, Math.PI / 2]}
+            />
             <meshStandardMaterial
-              color="#10b981"
-              emissive="#059669"
-              emissiveIntensity={renderMode === "twin" ? 0.55 : 0.2}
-              roughness={0.35}
+              color="#34A867"
+              roughness={0.45}
               transparent={isTransparent}
               opacity={bodyOpacity}
             />
           </mesh>
-          <mesh position={[b.w * 0.36, 0.45, -b.d * 0.34]}>
-            <cylinderGeometry args={[0.07, 0.1, 1.0, 8]} />
+          <mesh position={[b.w * 0.35, 0.44, -b.d * 0.33]} castShadow>
+            <cylinderGeometry args={[0.065, 0.095, 0.96, 10]} />
             <meshStandardMaterial
-              color="#173c5e"
-              emissive="#22d3ee"
-              emissiveIntensity={0.35}
+              color="#FFFFFF"
+              roughness={0.65}
               transparent={isTransparent}
               opacity={bodyOpacity}
             />
@@ -358,22 +327,19 @@ export const DetailedBuilding = memo(function DetailedBuilding({
         </group>
       ) : null}
 
-      {/* Landmark glowing rooftop beacon ring */}
+      {/* Landmark ground selection ring (Apple Blue when hovered/selected) */}
       {isLandmark ? (
-        <mesh
-          rotation={[-Math.PI / 2, 0, 0]}
-          position={[0, 0.035, 0]}
-        >
-          <ringGeometry args={[Math.max(b.w, b.d) * 0.64, Math.max(b.w, b.d) * 0.74, 24]} />
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.025, 0]}>
+          <ringGeometry args={[Math.max(b.w, b.d) * 0.64, Math.max(b.w, b.d) * 0.72, 28]} />
           <meshBasicMaterial
-            color={isSelectedLandmark || hovered ? "#38bdf8" : "#22d3ee"}
+            color="#007AFF"
             transparent
-            opacity={isSelectedLandmark || hovered ? 0.85 : 0.38}
+            opacity={isSelectedLandmark || hovered ? 0.85 : 0.24}
           />
         </mesh>
       ) : null}
 
-      {/* Crisp blueprint edges */}
+      {/* Crisp architectural edges */}
       <lineSegments position={[0, b.h / 2, 0]} geometry={edgesGeo}>
         <lineBasicMaterial color={edgeColor} transparent opacity={edgeOpacity} />
       </lineSegments>
@@ -382,7 +348,7 @@ export const DetailedBuilding = memo(function DetailedBuilding({
 });
 
 /* ------------------------------------------------------------------ */
-/* Elevated Metro Rail & animated train                                */
+/* Elevated Metro Rail & sleek white commuter train                    */
 /* ------------------------------------------------------------------ */
 
 export const ElevatedMetroLine = memo(function ElevatedMetroLine({
@@ -398,44 +364,43 @@ export const ElevatedMetroLine = memo(function ElevatedMetroLine({
   useFrame(({ clock }) => {
     if (!trainRef.current) return;
     const t = clock.getElapsedTime();
-    trainRef.current.position.z = Math.sin(t * 0.34) * 11.8;
+    trainRef.current.position.z = Math.sin(t * 0.32) * 11.8;
   });
 
   const isXray = renderMode === "xray";
 
   return (
     <group position={[-1.5, 0, 0]}>
-      {/* Viaduct deck along N-S Arterial */}
-      <mesh position={[0, 2.88, 0]}>
+      {/* Viaduct deck */}
+      <mesh position={[0, 2.88, 0]} castShadow={!isXray} receiveShadow>
         <boxGeometry args={[0.58, 0.16, 28]} />
         <meshStandardMaterial
-          color="#132944"
-          roughness={0.55}
-          metalness={0.3}
+          color="#DCE2EB"
+          roughness={0.75}
           transparent={isXray}
-          opacity={isXray ? 0.35 : 0.95}
+          opacity={isXray ? 0.32 : 0.96}
         />
       </mesh>
-      {/* Viaduct guideway neon rail */}
+      {/* Clean blue rail accent */}
       <mesh position={[0, 2.97, 0]}>
-        <boxGeometry args={[0.12, 0.03, 28]} />
-        <meshBasicMaterial color="#22d3ee" transparent opacity={0.55} />
+        <boxGeometry args={[0.1, 0.025, 28]} />
+        <meshBasicMaterial color="#007AFF" transparent opacity={0.45} />
       </mesh>
 
-      {/* Support piers (skipping z=1.2 intersection pad) */}
+      {/* Piers */}
       {pierPositions.map((pz, idx) => (
-        <mesh key={`pier-${idx}`} position={[0, 1.42, pz]}>
-          <cylinderGeometry args={[0.12, 0.16, 2.84, 8]} />
+        <mesh key={`pier-${idx}`} position={[0, 1.42, pz]} castShadow={!isXray}>
+          <cylinderGeometry args={[0.11, 0.15, 2.84, 10]} />
           <meshStandardMaterial
-            color="#1e3a5f"
-            roughness={0.7}
+            color="#CFD6E0"
+            roughness={0.75}
             transparent={isXray}
-            opacity={isXray ? 0.35 : 0.9}
+            opacity={isXray ? 0.32 : 0.95}
           />
         </mesh>
       ))}
 
-      {/* Sector 04 Station platform canopy */}
+      {/* Sector 04 Metro Station canopy */}
       <group
         position={[0, 3.12, 3.4]}
         onClick={(event) => {
@@ -443,30 +408,23 @@ export const ElevatedMetroLine = memo(function ElevatedMetroLine({
           onSelectStation();
         }}
       >
-        <mesh>
+        <mesh castShadow={!isXray}>
           <boxGeometry args={[1.25, 0.09, 2.8]} />
           <meshStandardMaterial
-            color="#0e7490"
-            emissive="#0891b2"
-            emissiveIntensity={0.45}
+            color="#007AFF"
+            roughness={0.35}
             transparent
-            opacity={isXray ? 0.4 : 0.88}
+            opacity={isXray ? 0.35 : 0.85}
           />
         </mesh>
       </group>
 
-      {/* Animated 3-car Metro Train */}
+      {/* Animated 3-car white Metro train */}
       <group ref={trainRef} position={[0, 3.12, 0]}>
         {[-0.95, 0, 0.95].map((dz, idx) => (
-          <mesh key={`car-${idx}`} position={[0, 0, dz]}>
+          <mesh key={`car-${idx}`} position={[0, 0, dz]} castShadow>
             <boxGeometry args={[0.32, 0.24, 0.82]} />
-            <meshStandardMaterial
-              color="#e2e8f0"
-              emissive="#22d3ee"
-              emissiveIntensity={0.75}
-              roughness={0.25}
-              metalness={0.5}
-            />
+            <meshStandardMaterial color="#FFFFFF" roughness={0.3} metalness={0.1} />
           </mesh>
         ))}
       </group>
@@ -475,7 +433,7 @@ export const ElevatedMetroLine = memo(function ElevatedMetroLine({
 });
 
 /* ------------------------------------------------------------------ */
-/* Canal Bridges, Pedestrian Footbridges & Parks                       */
+/* Canal Bridges, Pedestrian Footbridges & Muted Natural Trees         */
 /* ------------------------------------------------------------------ */
 
 export const BridgesAndGreenery = memo(function BridgesAndGreenery({
@@ -488,71 +446,76 @@ export const BridgesAndGreenery = memo(function BridgesAndGreenery({
 
   return (
     <group>
-      {/* Canal crossing bridges */}
+      {/* Concrete canal bridges */}
       {canalBridgeZs.map((bz, idx) => (
-        <group key={`cbridge-${idx}`} position={[-6.2, 0.14, bz]}>
-          <mesh>
+        <group key={`cbridge-${idx}`} position={[-6.2, 0.13, bz]}>
+          <mesh receiveShadow>
             <boxGeometry args={[2.1, 0.14, 1.75]} />
-            <meshStandardMaterial color="#1b3352" roughness={0.75} />
+            <meshStandardMaterial color="#D6DCE5" roughness={0.8} />
           </mesh>
-          <mesh position={[0, 0.12, 0.84]}>
-            <boxGeometry args={[2.1, 0.1, 0.06]} />
-            <meshBasicMaterial color="#38bdf8" transparent opacity={0.45} />
+          <mesh position={[0, 0.11, 0.84]}>
+            <boxGeometry args={[2.1, 0.08, 0.06]} />
+            <meshStandardMaterial color="#B8C2CF" roughness={0.7} />
           </mesh>
-          <mesh position={[0, 0.12, -0.84]}>
-            <boxGeometry args={[2.1, 0.1, 0.06]} />
-            <meshBasicMaterial color="#38bdf8" transparent opacity={0.45} />
+          <mesh position={[0, 0.11, -0.84]}>
+            <boxGeometry args={[2.1, 0.08, 0.06]} />
+            <meshStandardMaterial color="#B8C2CF" roughness={0.7} />
           </mesh>
         </group>
       ))}
 
-      {/* East Boulevard School Zone & South Market Pedestrian Footbridges */}
+      {/* Pedestrian overbridges */}
       {[
         { x: 5.4, z: -2.2 },
         { x: 2.2, z: -5.0 },
       ].map((fb, idx) => (
         <group key={`fbridge-${idx}`} position={[fb.x, 0, fb.z]}>
-          <mesh position={[0, 1.55, 0]}>
-            <boxGeometry args={[2.15, 0.1, 0.48]} />
+          <mesh position={[0, 1.55, 0]} castShadow={!isMuted}>
+            <boxGeometry args={[2.15, 0.09, 0.46]} />
             <meshStandardMaterial
-              color="#10b981"
-              emissive="#059669"
-              emissiveIntensity={0.4}
+              color="#FFFFFF"
+              roughness={0.6}
               transparent={isMuted}
-              opacity={isMuted ? 0.35 : 0.9}
+              opacity={isMuted ? 0.35 : 0.96}
             />
           </mesh>
           <mesh position={[-0.95, 0.78, 0]}>
-            <boxGeometry args={[0.12, 1.56, 0.38]} />
-            <meshStandardMaterial color="#1e3a5f" transparent={isMuted} opacity={isMuted ? 0.35 : 0.9} />
+            <boxGeometry args={[0.11, 1.56, 0.36]} />
+            <meshStandardMaterial
+              color="#CBD3DF"
+              transparent={isMuted}
+              opacity={isMuted ? 0.35 : 0.95}
+            />
           </mesh>
           <mesh position={[0.95, 0.78, 0]}>
-            <boxGeometry args={[0.12, 1.56, 0.38]} />
-            <meshStandardMaterial color="#1e3a5f" transparent={isMuted} opacity={isMuted ? 0.35 : 0.9} />
+            <boxGeometry args={[0.11, 1.56, 0.36]} />
+            <meshStandardMaterial
+              color="#CBD3DF"
+              transparent={isMuted}
+              opacity={isMuted ? 0.35 : 0.95}
+            />
           </mesh>
         </group>
       ))}
 
-      {/* Urban Parks & Street Trees */}
+      {/* Muted natural green vegetation */}
       {URBAN_TREES.map((tree) => (
         <group key={tree.id} position={[tree.x, 0, tree.z]} scale={tree.scale}>
-          <mesh position={[0, 0.18, 0]}>
-            <cylinderGeometry args={[0.04, 0.055, 0.36, 5]} />
+          <mesh position={[0, 0.17, 0]}>
+            <cylinderGeometry args={[0.04, 0.055, 0.34, 6]} />
             <meshStandardMaterial
-              color="#334155"
+              color="#8C7A6B"
               transparent={isMuted}
-              opacity={isMuted ? 0.25 : 0.9}
+              opacity={isMuted ? 0.25 : 0.95}
             />
           </mesh>
-          <mesh position={[0, 0.52, 0]}>
+          <mesh position={[0, 0.52, 0]} castShadow={!isMuted}>
             <dodecahedronGeometry args={[0.28, 0]} />
             <meshStandardMaterial
-              color="#065f46"
-              emissive="#10b981"
-              emissiveIntensity={renderMode === "twin" ? 0.25 : 0.05}
-              roughness={0.8}
+              color="#66A674"
+              roughness={0.85}
               transparent={isMuted}
-              opacity={isMuted ? 0.22 : 0.92}
+              opacity={isMuted ? 0.22 : 0.96}
             />
           </mesh>
         </group>
@@ -605,13 +568,12 @@ export const SubsurfaceUtilities = memo(function SubsurfaceUtilities({
                 position={[seg.cx, 0, seg.cz]}
                 rotation={[Math.PI / 2, 0, -seg.angle]}
               >
-                <cylinderGeometry args={[conduit.radius, conduit.radius, seg.length, 8]} />
+                <cylinderGeometry args={[conduit.radius, conduit.radius, seg.length, 10]} />
                 <meshStandardMaterial
                   color={conduit.color}
-                  emissive={conduit.color}
-                  emissiveIntensity={1.2}
+                  roughness={0.35}
                   transparent
-                  opacity={0.9}
+                  opacity={0.88}
                 />
               </mesh>
             ))}
@@ -647,12 +609,12 @@ export const MapOverlayLayers = memo(function MapOverlayLayers({
                 <meshBasicMaterial
                   color={zone.color}
                   transparent
-                  opacity={0.22 * zone.intensity}
+                  opacity={0.18 * zone.intensity}
                 />
               </mesh>
               <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.004, 0]}>
-                <ringGeometry args={[zone.radius * 0.84, zone.radius * 0.96, 32]} />
-                <meshBasicMaterial color={zone.color} transparent opacity={0.65} />
+                <ringGeometry args={[zone.radius * 0.88, zone.radius * 0.96, 32]} />
+                <meshBasicMaterial color={zone.color} transparent opacity={0.55} />
               </mesh>
             </group>
           ))
@@ -660,27 +622,22 @@ export const MapOverlayLayers = memo(function MapOverlayLayers({
 
       {showFlood ? (
         <group>
-          {/* Monsoon standing-water basins along Canal West & South Market */}
           <mesh rotation={[-Math.PI / 2, 0, 0]} position={[-7.1, 0.022, -2.5]}>
             <circleGeometry args={[2.8, 32]} />
             <meshStandardMaterial
-              color="#0284c7"
-              emissive="#0ea5e9"
-              emissiveIntensity={0.45}
+              color="#63AEE6"
               transparent
-              opacity={0.34}
-              roughness={0.2}
+              opacity={0.36}
+              roughness={0.25}
             />
           </mesh>
           <mesh rotation={[-Math.PI / 2, 0, 0]} position={[2.0, 0.022, -5.2]}>
             <circleGeometry args={[1.9, 28]} />
             <meshStandardMaterial
-              color="#0284c7"
-              emissive="#0ea5e9"
-              emissiveIntensity={0.38}
+              color="#63AEE6"
               transparent
-              opacity={0.28}
-              roughness={0.2}
+              opacity={0.3}
+              roughness={0.25}
             />
           </mesh>
         </group>
@@ -688,11 +645,10 @@ export const MapOverlayLayers = memo(function MapOverlayLayers({
 
       {showSmartGlow ? (
         <group>
-          {/* Illuminated LED corridor ground pools along East Civic Boulevard */}
           {[-5.2, -3.5, -1.8, -0.1, 2.8, 4.8].map((z, idx) => (
             <mesh key={`led-pool-${idx}`} rotation={[-Math.PI / 2, 0, 0]} position={[5.6, 0.022, z]}>
-              <circleGeometry args={[0.9, 20]} />
-              <meshBasicMaterial color="#10b981" transparent opacity={0.26} />
+              <circleGeometry args={[0.85, 20]} />
+              <meshBasicMaterial color="#34C759" transparent opacity={0.18} />
             </mesh>
           ))}
         </group>
@@ -702,7 +658,7 @@ export const MapOverlayLayers = memo(function MapOverlayLayers({
 });
 
 /* ------------------------------------------------------------------ */
-/* Subtle animated arterial traffic pulses                             */
+/* Subtle daylight arterial vehicle capsules                           */
 /* ------------------------------------------------------------------ */
 
 export const TrafficPulses = memo(function TrafficPulses({
@@ -718,13 +674,13 @@ export const TrafficPulses = memo(function TrafficPulses({
     if (!visible) return;
     const t = clock.getElapsedTime();
     if (pulse1.current) {
-      pulse1.current.position.x = ((t * 3.1) % 28) - 14;
+      pulse1.current.position.x = ((t * 2.8) % 28) - 14;
     }
     if (pulse2.current) {
-      pulse2.current.position.x = 14 - ((t * 2.5 + 9) % 28);
+      pulse2.current.position.x = 14 - ((t * 2.3 + 9) % 28);
     }
     if (pulse3.current) {
-      pulse3.current.position.z = ((t * 2.7 + 4) % 26) - 13;
+      pulse3.current.position.z = ((t * 2.5 + 4) % 26) - 13;
     }
   });
 
@@ -732,17 +688,17 @@ export const TrafficPulses = memo(function TrafficPulses({
 
   return (
     <group>
-      <mesh ref={pulse1} position={[0, 0.07, 1.55]}>
-        <boxGeometry args={[0.42, 0.06, 0.14]} />
-        <meshBasicMaterial color="#38bdf8" transparent opacity={0.8} />
+      <mesh ref={pulse1} position={[0, 0.06, 1.55]}>
+        <boxGeometry args={[0.38, 0.09, 0.16]} />
+        <meshStandardMaterial color="#1D1D1F" roughness={0.4} />
       </mesh>
-      <mesh ref={pulse2} position={[0, 0.07, 0.85]}>
-        <boxGeometry args={[0.42, 0.06, 0.14]} />
-        <meshBasicMaterial color="#fbbf24" transparent opacity={0.75} />
+      <mesh ref={pulse2} position={[0, 0.06, 0.85]}>
+        <boxGeometry args={[0.38, 0.09, 0.16]} />
+        <meshStandardMaterial color="#007AFF" roughness={0.35} />
       </mesh>
-      <mesh ref={pulse3} position={[5.4, 0.07, 0]}>
-        <boxGeometry args={[0.14, 0.06, 0.42]} />
-        <meshBasicMaterial color="#34d399" transparent opacity={0.8} />
+      <mesh ref={pulse3} position={[5.4, 0.06, 0]}>
+        <boxGeometry args={[0.16, 0.09, 0.38]} />
+        <meshStandardMaterial color="#FFFFFF" roughness={0.4} />
       </mesh>
     </group>
   );

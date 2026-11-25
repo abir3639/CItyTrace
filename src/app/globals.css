@@ -1,19 +1,32 @@
 @import "tailwindcss";
 
+@theme inline {
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", var(--font-inter), system-ui, sans-serif;
+}
+
 :root {
-  color-scheme: dark;
-  --ct-bg: #060b14;
-  --ct-surface: #0b121c;
-  --ct-surface-elevated: #0f1926;
-  --ct-cyan: #06b6d4;
-  --ct-cyan-bright: #22d3ee;
-  --ct-red: #ef4444;
-  --ct-amber: #f59e0b;
-  --ct-green: #10b981;
-  --ct-border: rgba(34, 211, 238, 0.16);
-  --ct-border-strong: rgba(34, 211, 238, 0.34);
-  scrollbar-color: #1e3a5f #070d17;
+  color-scheme: light;
+  --bg-canvas: #F5F5F7;
+  --surface-primary: #FFFFFF;
+  --surface-secondary: #F0F2F5;
+  --text-primary: #1D1D1F;
+  --text-secondary: #6E6E73;
+  --text-tertiary: #86868B;
+  --accent: #007AFF;
+  --success: #34C759;
+  --warning: #FF9500;
+  --danger: #FF3B30;
+  --border-subtle: rgba(0, 0, 0, 0.06);
+  --border-medium: rgba(0, 0, 0, 0.11);
+  --in-oklab: ;
+  scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
   scrollbar-width: thin;
+}
+
+@supports (background: linear-gradient(in oklab, white, black)) {
+  :root {
+    --in-oklab: in oklab;
+  }
 }
 
 @supports not (scrollbar-color: auto) {
@@ -24,109 +37,201 @@
 
 html,
 body {
-  background-color: #060b14;
-  color: #e2e8f0;
+  background-color: var(--bg-canvas);
+  color: var(--text-primary);
+  line-height: 1.5;
   min-height: 100%;
   overflow-x: hidden;
+  text-align: start;
 }
 
-/* Consistent, visible keyboard focus across the whole app. */
-:where(a, button, input, select, textarea, [tabindex]):focus-visible {
-  outline: 2px solid rgba(34, 211, 238, 0.65);
+h1,
+h2 {
+  text-wrap: balance;
+}
+
+/* Crisp Apple-style tabular numerals for currency, dates, codes, and counts */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Consistent keyboard focus ring */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid #007AFF;
   outline-offset: 2px;
-  border-radius: 8px;
 }
 
-/* Subtle custom scrollbars for internal dark panels */
+/* Subtle light scrollbars for scrollable panels */
 .ct-scroll::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
 .ct-scroll::-webkit-scrollbar-track {
-  background: #070d17;
+  background: transparent;
 }
 
 .ct-scroll::-webkit-scrollbar-thumb {
-  background: #1e3a5f;
+  background: rgba(0, 0, 0, 0.16);
   border-radius: 9999px;
 }
 
 .ct-scroll::-webkit-scrollbar-thumb:hover {
-  background: #2b537f;
+  background: rgba(0, 0, 0, 0.28);
 }
 
 /* ------------------------------------------------------------------ */
-/* Surfaces                                                            */
+/* Surfaces & Apple Liquid Glass                                       */
 /* ------------------------------------------------------------------ */
 
-.ct-panel {
-  background: linear-gradient(
-    180deg,
-    rgba(13, 22, 36, 0.92) 0%,
-    rgba(9, 15, 26, 0.96) 100%
-  );
-  border: 1px solid var(--ct-border);
+.ct-surface {
+  background: #FFFFFF;
+  border: 1px solid var(--border-subtle);
   box-shadow:
-    0 0 0 1px rgba(6, 182, 212, 0.05),
-    0 18px 40px -18px rgba(0, 0, 0, 0.8),
-    inset 0 1px 0 rgba(34, 211, 238, 0.08);
+    0 1px 2px rgba(0, 0, 0, 0.04),
+    0 8px 24px -12px rgba(15, 23, 42, 0.08);
 }
 
-.ct-panel-glow {
-  border-color: var(--ct-border-strong);
+.ct-surface-elevated {
+  background: #FFFFFF;
+  border: 1px solid rgba(0, 0, 0, 0.07);
   box-shadow:
-    0 0 28px -8px rgba(6, 182, 212, 0.25),
-    inset 0 1px 0 rgba(34, 211, 238, 0.16);
+    0 2px 6px rgba(0, 0, 0, 0.04),
+    0 16px 36px -14px rgba(15, 23, 42, 0.12);
 }
 
-.ct-panel-quiet {
-  background: rgba(8, 16, 29, 0.72);
-  border: 1px solid rgba(30, 58, 95, 0.6);
+.ct-surface-inset {
+  background: #F5F5F7;
+  border: 1px solid rgba(0, 0, 0, 0.05);
 }
 
-.ct-grid-backdrop {
-  background-image:
-    radial-gradient(circle at 30% 20%, rgba(6, 182, 212, 0.09), transparent 45%),
-    radial-gradient(circle at 80% 75%, rgba(14, 116, 144, 0.08), transparent 45%),
-    linear-gradient(rgba(34, 211, 238, 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(34, 211, 238, 0.03) 1px, transparent 1px);
-  background-size: 100% 100%, 100% 100%, 36px 36px, 36px 36px;
+.ct-glass {
+  background: rgba(255, 255, 255, 0.8);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    0 4px 12px rgba(0, 0, 0, 0.05),
+    0 20px 44px -16px rgba(15, 23, 42, 0.16);
 }
 
-/* Thin luminous rule used under section headings */
-.ct-rule {
-  height: 1px;
+.ct-glass-pill {
+  background: rgba(255, 255, 255, 0.85);
+  -webkit-backdrop-filter: blur(20px) saturate(185%);
+  backdrop-filter: blur(20px) saturate(185%);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    0 2px 8px rgba(0, 0, 0, 0.06),
+    0 12px 28px -10px rgba(15, 23, 42, 0.14);
+}
+
+.ct-sidebar-glass {
   background: linear-gradient(
-    90deg,
-    rgba(34, 211, 238, 0.45),
-    rgba(34, 211, 238, 0.04) 70%,
-    transparent
+    160deg var(--in-oklab),
+    rgba(255, 255, 255, 0.56) 0%,
+    rgba(255, 255, 255, 0.34) 48%,
+    rgba(242, 247, 255, 0.48) 100%
+  );
+  -webkit-backdrop-filter: blur(36px) saturate(220%) brightness(1.04);
+  backdrop-filter: blur(36px) saturate(220%) brightness(1.04);
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.92),
+    inset 1px 0 0 rgba(255, 255, 255, 0.62),
+    inset -1px 0 0 rgba(255, 255, 255, 0.45),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.38),
+    0 0 0 1px rgba(15, 23, 42, 0.06),
+    0 12px 36px -12px rgba(15, 23, 42, 0.14),
+    0 4px 12px -4px rgba(15, 23, 42, 0.05);
+}
+
+.ct-sidebar-glass::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 0;
+  background: radial-gradient(
+    125% 42% at 15% 0%,
+    rgba(255, 255, 255, 0.68) 0%,
+    rgba(255, 255, 255, 0.14) 46%,
+    transparent 72%
+  );
+}
+
+.ct-sidebar-glass-overlay {
+  background: linear-gradient(
+    160deg var(--in-oklab),
+    rgba(255, 255, 255, 0.66) 0%,
+    rgba(255, 255, 255, 0.44) 50%,
+    rgba(244, 248, 255, 0.56) 100%
+  );
+  -webkit-backdrop-filter: blur(42px) saturate(240%) brightness(1.06);
+  backdrop-filter: blur(42px) saturate(240%) brightness(1.06);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.95),
+    inset 1px 0 0 rgba(255, 255, 255, 0.7),
+    inset -1px 0 0 rgba(255, 255, 255, 0.52),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.42),
+    0 0 0 1px rgba(15, 23, 42, 0.07),
+    0 24px 56px -14px rgba(15, 23, 42, 0.22),
+    0 8px 20px -6px rgba(15, 23, 42, 0.09);
+}
+
+/* Segmented control track & active thumb */
+.ct-segmented {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 9999px;
+  background: rgba(0, 0, 0, 0.055);
+  border: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+.ct-segmented-item {
+  border-radius: 9999px;
+  padding: 5px 12px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  transition:
+    background-color 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    color 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    box-shadow 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    transform 150ms ease-out;
+  cursor: pointer;
+}
+
+.ct-segmented-item:hover {
+  color: var(--text-primary);
+}
+
+.ct-segmented-item[aria-pressed="true"],
+.ct-segmented-item[aria-current="page"] {
+  background: #FFFFFF;
+  color: var(--text-primary);
+  font-weight: 600;
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.08),
+    0 1px 1px rgba(0, 0, 0, 0.04);
+}
+
+/* Subtle diagonal stripe for unverified reported spend */
+.ct-hatch {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    rgba(255, 149, 0, 0.42) 0 5px,
+    rgba(255, 149, 0, 0.14) 5px 10px
   );
 }
 
 /* ------------------------------------------------------------------ */
-/* Motion                                                              */
+/* Motion (opt-in for reduced-motion accessibility)                    */
 /* ------------------------------------------------------------------ */
-
-@keyframes ct-pulse-ring {
-  0% {
-    transform: scale(0.92);
-    opacity: 0.75;
-  }
-  70% {
-    transform: scale(1.25);
-    opacity: 0;
-  }
-  100% {
-    transform: scale(1.25);
-    opacity: 0;
-  }
-}
-
-.ct-pulse-ring {
-  animation: ct-pulse-ring 2.2s cubic-bezier(0.22, 1, 0.36, 1) infinite;
-}
 
 @keyframes ct-fade-up {
   from {
@@ -140,7 +245,13 @@ body {
 }
 
 .ct-fade-up {
-  animation: ct-fade-up 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .ct-fade-up {
+    animation: ct-fade-up 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
 }
 
 @keyframes ct-sweep {
@@ -152,40 +263,44 @@ body {
   }
 }
 
-/* Loading skeleton sweep */
 .ct-skeleton {
   position: relative;
   overflow: hidden;
-  background: rgba(30, 58, 95, 0.35);
+  background: #E8EAEE;
 }
 
-.ct-skeleton::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  width: 50%;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(34, 211, 238, 0.12),
-    transparent
-  );
-  animation: ct-sweep 1.4s ease-in-out infinite;
-}
-
-/* Striped bar used to show spend that has no verified evidence */
-.ct-hatch {
-  background-image: repeating-linear-gradient(
-    45deg,
-    rgba(245, 158, 11, 0.55) 0 6px,
-    rgba(245, 158, 11, 0.15) 6px 12px
-  );
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .ct-pulse-ring,
-  .ct-fade-up,
+@media (prefers-reduced-motion: no-preference) {
   .ct-skeleton::after {
-    animation: none;
+    content: "";
+    position: absolute;
+    inset: 0;
+    width: 50%;
+    background: linear-gradient(
+      90deg var(--in-oklab),
+      transparent,
+      rgba(255, 255, 255, 0.72),
+      transparent
+    );
+    animation: ct-sweep 1.5s ease-in-out infinite;
+  }
+}
+
+/* Forced Colors / High Contrast Mode support */
+@media (forced-colors: active) {
+  .ct-surface,
+  .ct-surface-elevated,
+  .ct-surface-inset,
+  .ct-glass,
+  .ct-glass-pill,
+  .ct-sidebar-glass,
+  .ct-sidebar-glass-overlay {
+    background: Canvas;
+    color: CanvasText;
+    border: 1px solid CanvasText;
+    box-shadow: none;
+  }
+
+  .ct-sidebar-glass::before {
+    display: none;
   }
 }

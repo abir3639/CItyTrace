@@ -7,6 +7,7 @@ import {
   FolderKanban,
   LayoutGrid,
   MapPin,
+  Search,
   Sparkles,
   Table2,
 } from "lucide-react";
@@ -28,7 +29,7 @@ import {
 } from "@/utils/formatters";
 
 export const metadata: Metadata = {
-  title: "Public Projects · CITYTRACE",
+  title: "Public Projects · CityTrace",
 };
 
 const PROJECT_STATUSES: ProjectStatus[] = [
@@ -94,22 +95,22 @@ export default async function PublicProjectsPage({
   ).length;
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-6">
       <PageHeader
         eyebrow="Public Projects"
-        title="Sanctioned civic works"
-        description={`${PROJECTS.length} publicly funded works across six sectors, with the responsible authority, budget position and milestone schedule for each.`}
+        title="Sanctioned Civic Works"
+        description={`${PROJECTS.length} publicly funded works across six sectors, tracking responsible authorities, budgets, and delivery milestones.`}
         actions={
           <Link
             href="/money-tracker"
-            className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-400/50 bg-cyan-500/15 px-2.5 py-1 font-mono text-[11px] font-semibold text-cyan-200 hover:bg-cyan-500/25"
+            className="inline-flex items-center gap-1.5 rounded-full border border-black/[0.08] bg-white px-4 py-2 text-[13px] font-semibold text-[#007AFF] shadow-sm hover:bg-[#F9FAFB]"
           >
-            Money tracker <ArrowRight className="h-3 w-3" />
+            Money tracker <ArrowRight className="h-3.5 w-3.5" />
           </Link>
         }
       />
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           label="Sanctioned projects"
           value={String(PROJECTS.length)}
@@ -120,7 +121,7 @@ export default async function PublicProjectsPage({
         <StatCard
           label="Total allocation"
           value={formatBdtCompact(totals.allocatedBdt)}
-          hint="Sum of every sanctioned ceiling"
+          hint="Combined sanctioned ceiling"
           icon={<Building2 className="h-4 w-4" />}
           tone="neutral"
         />
@@ -134,19 +135,19 @@ export default async function PublicProjectsPage({
         <StatCard
           label="Verified expenditure"
           value={formatBdtCompact(totals.verifiedBdt)}
-          hint={`${formatBdtCompact(totals.unverifiedBdt)} has no verification on file`}
+          hint={`${formatBdtCompact(totals.unverifiedBdt)} unverified`}
           icon={<Building2 className="h-4 w-4" />}
           tone="ok"
         />
       </div>
 
-      <Panel className="flex flex-col gap-3 p-4">
+      <Panel className="flex flex-col gap-4 p-5">
         <PanelHeader
-          title="Filter"
-          description="By delivery status or sector."
+          title="Filter & Search"
+          description="Narrow works by status, sector, or keyword."
           actions={
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="inline-flex rounded-lg border border-slate-700/80 bg-[#07101d] p-0.5">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <div className="ct-segmented">
                 <Link
                   href={buildHref({
                     status: statusParam,
@@ -154,13 +155,9 @@ export default async function PublicProjectsPage({
                     q: query,
                   })}
                   aria-current={view === "cards" ? "page" : undefined}
-                  className={`inline-flex items-center gap-1 rounded-md px-2 py-1 font-mono text-[10px] transition-colors ${
-                    view === "cards"
-                      ? "bg-cyan-500/20 text-cyan-200"
-                      : "text-slate-400 hover:text-slate-200"
-                  }`}
+                  className="ct-segmented-item inline-flex items-center gap-1.5"
                 >
-                  <LayoutGrid className="h-3 w-3" />
+                  <LayoutGrid className="h-3.5 w-3.5" />
                   Cards
                 </Link>
                 <Link
@@ -171,20 +168,16 @@ export default async function PublicProjectsPage({
                     view: "table",
                   })}
                   aria-current={view === "table" ? "page" : undefined}
-                  className={`inline-flex items-center gap-1 rounded-md px-2 py-1 font-mono text-[10px] transition-colors ${
-                    view === "table"
-                      ? "bg-cyan-500/20 text-cyan-200"
-                      : "text-slate-400 hover:text-slate-200"
-                  }`}
+                  className="ct-segmented-item inline-flex items-center gap-1.5"
                 >
-                  <Table2 className="h-3 w-3" />
+                  <Table2 className="h-3.5 w-3.5" />
                   Table
                 </Link>
               </div>
               {status || sector || query ? (
                 <Link
                   href={buildHref({ view: viewValue })}
-                  className="font-mono text-[10px] text-cyan-300 hover:text-cyan-200"
+                  className="text-[12.5px] font-medium text-[#007AFF] hover:underline"
                 >
                   Clear
                 </Link>
@@ -192,43 +185,45 @@ export default async function PublicProjectsPage({
             </div>
           }
         />
-        <div className="flex flex-wrap items-center gap-1.5">
-          <form action="/public-projects" method="get" className="flex w-full flex-wrap items-center gap-2">
-            {status ? <input type="hidden" name="status" value={status} /> : null}
-            {sector ? <input type="hidden" name="sector" value={sector} /> : null}
-            {view === "table" ? <input type="hidden" name="view" value="table" /> : null}
+
+        <form action="/public-projects" method="get" className="flex w-full flex-wrap items-center gap-2.5">
+          {status ? <input type="hidden" name="status" value={status} /> : null}
+          {sector ? <input type="hidden" name="sector" value={sector} /> : null}
+          {view === "table" ? <input type="hidden" name="view" value="table" /> : null}
+          <label className="flex min-w-[240px] flex-1 items-center gap-2 rounded-full border border-black/[0.08] bg-[#F5F5F7] px-4 py-2 focus-within:border-[#007AFF] focus-within:bg-white">
+            <Search className="h-3.5 w-3.5 shrink-0 text-[#86868B]" />
             <input
               type="search"
               name="q"
               defaultValue={query ?? ""}
-              placeholder="Search projects by name, code, authority or location…"
+              placeholder="Search projects by name, code, authority, or location…"
               aria-label="Search projects"
-              className="min-w-[240px] flex-1 rounded-lg border border-slate-800 bg-[#07101d] px-2.5 py-1.5 font-mono text-[11px] text-slate-100 placeholder:text-slate-500 focus:border-cyan-500/50 focus:outline-none"
+              className="w-full bg-transparent text-[13.5px] text-[#1D1D1F] placeholder:text-[#86868B] focus:outline-none"
             />
-            <button
-              type="submit"
-              className="rounded-lg border border-cyan-400/50 bg-cyan-500/15 px-3 py-1.5 font-mono text-[11px] font-semibold text-cyan-200 hover:bg-cyan-500/25 cursor-pointer"
+          </label>
+          <button
+            type="submit"
+            className="rounded-full bg-[#007AFF] px-4 py-2 text-[13px] font-semibold text-white hover:bg-[#0066D6] cursor-pointer"
+          >
+            Search
+          </button>
+          {query ? (
+            <Link
+              href={buildHref({ status: statusParam, sector: sectorParam, view: viewValue })}
+              className="text-[12.5px] text-[#6E6E73] hover:text-[#007AFF]"
             >
-              Search
-            </button>
-            {query ? (
-              <Link
-                href={buildHref({ status: statusParam, sector: sectorParam, view: viewValue })}
-                className="font-mono text-[10px] text-slate-400 hover:text-cyan-200"
-              >
-                Clear search
-              </Link>
-            ) : null}
-          </form>
-        </div>
+              Clear search
+            </Link>
+          ) : null}
+        </form>
 
         <div className="flex flex-wrap items-center gap-1.5">
           <Link
             href={buildHref({ sector: sectorParam, q: query, view: viewValue })}
-            className={`rounded-full border px-2 py-0.5 font-mono text-[10px] transition-colors ${
+            className={`rounded-full px-3 py-1 text-[12px] font-medium transition-colors ${
               !status
-                ? "border-cyan-400/60 bg-cyan-500/15 text-cyan-200"
-                : "border-slate-700 text-slate-300 hover:border-cyan-500/40"
+                ? "bg-[#1D1D1F] text-white"
+                : "bg-[#F0F2F5] text-[#48484A] hover:bg-black/[0.08]"
             }`}
           >
             All ({PROJECTS.length})
@@ -239,23 +234,23 @@ export default async function PublicProjectsPage({
               <Link
                 key={value}
                 href={buildHref({ status: value, sector: sectorParam, q: query, view: viewValue })}
-                className={`rounded-full border px-2 py-0.5 font-mono text-[10px] transition-colors ${
+                className={`rounded-full px-3 py-1 text-[12px] font-medium transition-colors tabular-nums ${
                   status === value
-                    ? "border-cyan-400/60 bg-cyan-500/15 text-cyan-200"
-                    : "border-slate-700 text-slate-300 hover:border-cyan-500/40"
+                    ? "bg-[#1D1D1F] text-white"
+                    : "bg-[#F0F2F5] text-[#48484A] hover:bg-black/[0.08]"
                 }`}
               >
                 {PROJECT_STATUS_LABELS[value]} ({count})
               </Link>
             );
           })}
-          <span className="mx-1 h-4 w-px bg-slate-700" />
+          <span className="mx-1 h-4 w-px bg-black/[0.1]" />
           <Link
             href={buildHref({ status: statusParam, q: query, view: viewValue })}
-            className={`rounded-full border px-2 py-0.5 font-mono text-[10px] transition-colors ${
+            className={`rounded-full px-3 py-1 text-[12px] font-medium transition-colors ${
               !sector
-                ? "border-cyan-400/60 bg-cyan-500/15 text-cyan-200"
-                : "border-slate-700 text-slate-300 hover:border-cyan-500/40"
+                ? "bg-[#1D1D1F] text-white"
+                : "bg-[#F0F2F5] text-[#48484A] hover:bg-black/[0.08]"
             }`}
           >
             All sectors
@@ -264,10 +259,10 @@ export default async function PublicProjectsPage({
             <Link
               key={item.id}
               href={buildHref({ status: statusParam, sector: item.id, q: query, view: viewValue })}
-              className={`rounded-full border px-2 py-0.5 font-mono text-[10px] transition-colors ${
+              className={`rounded-full px-3 py-1 text-[12px] font-medium transition-colors ${
                 sector === item.id
-                  ? "border-cyan-400/60 bg-cyan-500/15 text-cyan-200"
-                  : "border-slate-700 text-slate-300 hover:border-cyan-500/40"
+                  ? "bg-[#1D1D1F] text-white"
+                  : "bg-[#F0F2F5] text-[#48484A] hover:bg-black/[0.08]"
               }`}
             >
               {item.code}
@@ -280,18 +275,18 @@ export default async function PublicProjectsPage({
         <EmptyState
           icon={<FolderKanban className="h-6 w-6" />}
           title="No projects match these filters"
-          description="Every sanctioned work is recorded here; try clearing the status or sector filter."
+          description="Try clearing the status, sector, or search filter."
           action={
             <Link
               href={buildHref({ view: viewValue })}
-              className="rounded-lg border border-cyan-400/50 bg-cyan-500/15 px-3 py-1.5 font-mono text-[11px] font-semibold text-cyan-200 hover:bg-cyan-500/25"
+              className="rounded-full bg-[#007AFF] px-4 py-2 text-[13px] font-semibold text-white hover:bg-[#0066D6]"
             >
               Reset filters
             </Link>
           }
         />
       ) : view === "cards" ? (
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {filtered.map((project) => {
             const tone = projectStatusTone(project.status);
             const projectSector = getSector(project.sectorId);
@@ -307,52 +302,52 @@ export default async function PublicProjectsPage({
               <Panel
                 key={project.id}
                 glow={isFocused}
-                className={`flex flex-col gap-3 p-4 transition-colors hover:border-cyan-500/40 ${
-                  isFocused ? "ring-1 ring-cyan-400/50" : ""
+                className={`flex flex-col gap-3.5 p-5 transition-all hover:-translate-y-0.5 hover:shadow-md ${
+                  isFocused ? "ring-2 ring-[#007AFF]" : ""
                 }`}
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="rounded border border-cyan-500/35 bg-cyan-500/10 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-cyan-300">
+                    <span className="rounded-full bg-[#007AFF]/[0.1] px-2.5 py-0.5 text-[11.5px] font-semibold text-[#0055CC] tabular-nums">
                       {project.code}
                     </span>
                     <Badge tone={severityTone(project.severity)}>
-                      {project.severity.toUpperCase()}
+                      {project.severity.charAt(0).toUpperCase() + project.severity.slice(1)}
                     </Badge>
                     <Badge tone={tone} dot>
                       {PROJECT_STATUS_LABELS[project.status]}
                     </Badge>
                     {overdue > 0 ? <Badge tone="warn">{overdue}d late</Badge> : null}
                   </div>
-                  <span className="font-mono text-[10px] text-slate-400">
+                  <span className="text-[12px] text-[#6E6E73]">
                     {projectSector?.code ?? project.sectorId} · {CATEGORY_LABELS[project.category]}
                   </span>
                 </div>
 
                 <div>
                   <Link href={`/public-projects/${project.id}`} className="group block">
-                    <h3 className="text-[13px] font-bold leading-snug text-slate-50 group-hover:text-cyan-200">
+                    <h2 className="text-[16px] font-semibold leading-snug text-[#1D1D1F] group-hover:text-[#007AFF]">
                       {project.name}
-                    </h3>
+                    </h2>
                   </Link>
-                  <p className="mt-1 flex items-start gap-1.5 text-[11px] text-slate-400">
-                    <MapPin className="mt-0.5 h-3 w-3 shrink-0 text-cyan-400" />
+                  <p className="mt-1 flex items-start gap-1.5 text-[12.5px] text-[#6E6E73]">
+                    <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#007AFF]" />
                     <span>{project.location}</span>
                   </p>
-                  <p className="mt-0.5 font-mono text-[10px] text-slate-500">{project.authority}</p>
+                  <p className="mt-0.5 text-[12px] text-[#86868B]">{project.authority}</p>
                 </div>
 
-                <div className="rounded-lg border border-slate-800 bg-[#07101d] p-2.5">
-                  <div className="flex flex-wrap items-baseline justify-between gap-2 font-mono text-[10px]">
-                    <span className="text-slate-400">
+                <div className="ct-surface-inset rounded-[14px] p-3.5">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2 text-[12.5px] tabular-nums">
+                    <span className="text-[#48484A]">
                       {formatBdtCompact(project.reportedExpenditureBdt)} reported of{" "}
                       {formatBdtCompact(project.allocatedBudgetBdt)}
                     </span>
-                    <span className="font-semibold text-cyan-200">
+                    <span className="font-semibold text-[#0055CC]">
                       {formatPercent(reportedPct, 0)}
                     </span>
                   </div>
-                  <div className="mt-1.5">
+                  <div className="mt-2">
                     <SpendBar
                       allocated={project.allocatedBudgetBdt}
                       reported={project.reportedExpenditureBdt}
@@ -360,7 +355,7 @@ export default async function PublicProjectsPage({
                       height="h-2"
                     />
                   </div>
-                  <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2 font-mono text-[10px]">
+                  <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[12px] tabular-nums">
                     <span
                       className={
                         project.verifiedExpenditureBdt === undefined
@@ -372,50 +367,50 @@ export default async function PublicProjectsPage({
                         ? "Missing verified spend"
                         : `${formatBdtCompact(project.verifiedExpenditureBdt)} verified`}
                     </span>
-                    <span className="text-slate-400">
+                    <span className="text-[#6E6E73]">
                       Planned {formatDate(project.plannedCompletionDate)}
                     </span>
                   </div>
                 </div>
 
                 <div>
-                  <div className="flex items-center justify-between font-mono text-[10px] text-slate-400">
+                  <div className="flex items-center justify-between text-[12px] text-[#6E6E73] tabular-nums">
                     <span>
                       Physical progress · {milestones.met}/{milestones.total} milestones met
                       {milestones.missed > 0 ? ` · ${milestones.missed} missed` : ""}
                     </span>
-                    <span className="font-semibold text-slate-200">
+                    <span className="font-semibold text-[#1D1D1F]">
                       {project.verifiedProgressPercent}%
                     </span>
                   </div>
                   <ProgressBar
                     value={project.verifiedProgressPercent}
                     tone={tone}
-                    className="mt-1 h-1.5"
+                    className="mt-1.5 h-1.5"
                     label={`${project.verifiedProgressPercent} percent complete`}
                   />
                 </div>
 
-                <div className="mt-auto flex flex-wrap items-center justify-between gap-2 border-t border-slate-800/80 pt-2 font-mono text-[10px]">
-                  <div className="flex items-center gap-3">
+                <div className="mt-auto flex flex-wrap items-center justify-between gap-2 border-t border-black/[0.05] pt-3 text-[12.5px]">
+                  <div className="flex items-center gap-3.5">
                     <Link
                       href={`/city-explorer?feature=project:${project.id}`}
-                      className="inline-flex items-center gap-1 text-slate-300 hover:text-cyan-200"
+                      className="inline-flex items-center gap-1 font-medium text-[#6E6E73] hover:text-[#1D1D1F]"
                     >
-                      <MapPin className="h-3 w-3 text-cyan-400" /> Locate on 3D map
+                      <MapPin className="h-3.5 w-3.5 text-[#007AFF]" /> Locate on 3D map
                     </Link>
                     <Link
                       href={`/ai-investigation?project=${project.id}`}
-                      className="inline-flex items-center gap-1 text-slate-300 hover:text-cyan-200"
+                      className="inline-flex items-center gap-1 font-medium text-[#6E6E73] hover:text-[#1D1D1F]"
                     >
-                      <Sparkles className="h-3 w-3 text-cyan-400" /> Investigate
+                      <Sparkles className="h-3.5 w-3.5 text-[#007AFF]" /> Investigate
                     </Link>
                   </div>
                   <Link
                     href={`/public-projects/${project.id}`}
-                    className="inline-flex items-center gap-1 font-semibold text-cyan-300 hover:text-cyan-200"
+                    className="inline-flex items-center gap-1 font-semibold text-[#007AFF] hover:underline"
                   >
-                    Project ledger <ArrowRight className="h-3 w-3" />
+                    Project ledger <ArrowRight className="h-3.5 w-3.5" />
                   </Link>
                 </div>
               </Panel>
@@ -434,19 +429,19 @@ export default async function PublicProjectsPage({
               <caption className="sr-only">
                 Sanctioned public works showing sector, status, allocated budget, reported spend, spend position, progress, and planned finish date
               </caption>
-              <thead className="sticky top-0 z-10 bg-[#0a1421]">
-                <tr className="border-b border-slate-800 font-mono text-[10px] tracking-wider text-slate-400 uppercase">
-                  <th scope="col" className="px-3 py-2 font-semibold">Project</th>
-                  <th scope="col" className="px-3 py-2 font-semibold">Sector</th>
-                  <th scope="col" className="px-3 py-2 font-semibold">Status</th>
-                  <th scope="col" className="px-3 py-2 text-right font-semibold">Allocated</th>
-                  <th scope="col" className="px-3 py-2 text-right font-semibold">Reported</th>
-                  <th scope="col" className="px-3 py-2 font-semibold">Spend position</th>
-                  <th scope="col" className="px-3 py-2 font-semibold">Progress</th>
-                  <th scope="col" className="px-3 py-2 font-semibold">Planned finish</th>
+              <thead className="sticky top-0 z-10 bg-[#F9FAFB]">
+                <tr className="border-b border-black/[0.06] text-[12px] font-medium text-[#6E6E73]">
+                  <th scope="col" className="px-4 py-3">Project</th>
+                  <th scope="col" className="px-3 py-3">Sector</th>
+                  <th scope="col" className="px-3 py-3">Status</th>
+                  <th scope="col" className="px-3 py-3 text-right">Allocated</th>
+                  <th scope="col" className="px-3 py-3 text-right">Reported</th>
+                  <th scope="col" className="px-3 py-3">Spend position</th>
+                  <th scope="col" className="px-3 py-3">Progress</th>
+                  <th scope="col" className="px-4 py-3">Planned finish</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-black/[0.05] bg-white">
                 {filtered.map((project) => {
                   const tone = projectStatusTone(project.status);
                   const projectSector = getSector(project.sectorId);
@@ -456,40 +451,40 @@ export default async function PublicProjectsPage({
                   return (
                     <tr
                       key={project.id}
-                      className={`border-b border-slate-800/60 last:border-0 transition-colors ${
-                        isFocused ? "bg-cyan-500/10" : "hover:bg-slate-800/30"
+                      className={`transition-colors ${
+                        isFocused ? "bg-[#007AFF]/[0.06]" : "hover:bg-[#F9FAFB]"
                       }`}
                     >
-                      <th scope="row" className="px-3 py-2.5 align-top font-normal">
+                      <th scope="row" className="px-4 py-3.5 align-top font-normal">
                         <Link
                           href={`/public-projects/${project.id}`}
-                          className="font-mono text-[10px] font-semibold text-cyan-300 hover:text-cyan-200"
+                          className="text-[12px] font-semibold text-[#0055CC] hover:underline tabular-nums"
                         >
                           {project.code}
                         </Link>
-                        <p className="mt-0.5 max-w-[22rem] text-[11px] font-semibold leading-snug text-slate-100">
+                        <p className="mt-0.5 max-w-[22rem] text-[13px] font-semibold leading-snug text-[#1D1D1F]">
                           {project.name}
                         </p>
-                        <p className="mt-0.5 flex items-center gap-1 font-mono text-[9px] text-slate-500">
-                          <MapPin className="h-2.5 w-2.5" />
+                        <p className="mt-0.5 flex items-center gap-1 text-[11.5px] text-[#6E6E73]">
+                          <MapPin className="h-3 w-3" />
                           {project.location}
                         </p>
                       </th>
-                      <td className="px-3 py-2.5 align-top font-mono text-[10px] text-slate-300">
+                      <td className="px-3 py-3.5 align-top text-[12.5px] text-[#48484A]">
                         {projectSector?.code ?? project.sectorId}
                       </td>
-                      <td className="px-3 py-2.5 align-top">
+                      <td className="px-3 py-3.5 align-top">
                         <Badge tone={tone} dot>
                           {PROJECT_STATUS_LABELS[project.status]}
                         </Badge>
                       </td>
-                      <td className="px-3 py-2.5 text-right align-top font-mono text-[10px] text-slate-200">
+                      <td className="px-3 py-3.5 text-right align-top text-[12.5px] text-[#1D1D1F] tabular-nums">
                         {formatBdtCompact(project.allocatedBudgetBdt)}
                       </td>
-                      <td className="px-3 py-2.5 text-right align-top font-mono text-[10px] text-cyan-200">
+                      <td className="px-3 py-3.5 text-right align-top text-[12.5px] font-medium text-[#0055CC] tabular-nums">
                         {formatBdtCompact(project.reportedExpenditureBdt)}
                       </td>
-                      <td className="px-3 py-2.5 align-top">
+                      <td className="px-3 py-3.5 align-top">
                         <div className="w-32">
                           <SpendBar
                             allocated={project.allocatedBudgetBdt}
@@ -498,14 +493,14 @@ export default async function PublicProjectsPage({
                             height="h-1.5"
                           />
                           <p
-                            className={`mt-1 font-mono text-[9px] ${
+                            className={`mt-1 text-[11px] tabular-nums ${
                               project.verifiedExpenditureBdt === undefined
                                 ? TONES.warn.label
                                 : TONES.ok.label
                             }`}
                           >
                             {project.verifiedExpenditureBdt === undefined
-                              ? "unverified"
+                              ? "Unverified"
                               : `${formatPercent(
                                   (project.verifiedExpenditureBdt / project.allocatedBudgetBdt) * 100,
                                   0
@@ -513,7 +508,7 @@ export default async function PublicProjectsPage({
                           </p>
                         </div>
                       </td>
-                      <td className="px-3 py-2.5 align-top">
+                      <td className="px-3 py-3.5 align-top">
                         <div className="w-24">
                           <ProgressBar
                             value={project.verifiedProgressPercent}
@@ -521,19 +516,19 @@ export default async function PublicProjectsPage({
                             className="h-1.5"
                             label={`${project.verifiedProgressPercent} percent complete`}
                           />
-                          <p className="mt-1 font-mono text-[9px] text-slate-400">
+                          <p className="mt-1 text-[11px] text-[#6E6E73] tabular-nums">
                             {project.verifiedProgressPercent}%
                           </p>
                         </div>
                       </td>
-                      <td className="px-3 py-2.5 align-top font-mono text-[10px]">
-                        <span className="text-slate-300">
+                      <td className="px-4 py-3.5 align-top text-[12.5px] tabular-nums">
+                        <span className="text-[#1D1D1F]">
                           {formatDate(project.plannedCompletionDate)}
                         </span>
                         {overdue > 0 ? (
-                          <p className={`mt-0.5 ${TONES.warn.label}`}>{overdue}d late</p>
+                          <p className={`mt-0.5 text-[11.5px] ${TONES.warn.label}`}>{overdue}d late</p>
                         ) : project.actualCompletionDate ? (
-                          <p className={`mt-0.5 ${TONES.ok.label}`}>
+                          <p className={`mt-0.5 text-[11.5px] ${TONES.ok.label}`}>
                             {formatDate(project.actualCompletionDate)}
                           </p>
                         ) : null}

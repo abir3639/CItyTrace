@@ -1,23 +1,17 @@
 import type { Metadata } from "next";
-import { Inter, JetBrains_Mono } from "next/font/google";
+import { Inter } from "next/font/google";
 import "./globals.css";
 
 const inter = Inter({
   subsets: ["latin"],
-  variable: "--font-sans",
-  display: "swap",
-});
-
-const jetbrainsMono = JetBrains_Mono({
-  subsets: ["latin"],
-  variable: "--font-mono",
+  variable: "--font-inter",
   display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "CITYTRACE — The Truth Behind Every Street",
+  title: "CityTrace — The Truth Behind Every Street",
   description:
-    "Lightweight 3D civic intelligence MVP visualizing Dhaka-inspired urban infrastructure history, public expenditure in BDT, and AI-assisted accountability analysis.",
+    "Civic transparency platform visualizing urban infrastructure history, public expenditure in BDT, and evidence-bound accountability analysis.",
 };
 
 export default function RootLayout({
@@ -26,14 +20,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="en"
-      className={`${inter.variable} ${jetbrainsMono.variable} dark`}
-    >
+    <html lang="en" className={inter.variable}>
       <head>
-        <meta name="color-scheme" content="dark" />
+        <meta name="color-scheme" content="light" />
       </head>
-      <body className="font-sans bg-[#060B14] text-slate-100 antialiased selection:bg-cyan-500/30 selection:text-cyan-100">
+      <body className="font-sans bg-[#F5F5F7] text-[#1D1D1F] antialiased selection:bg-[#007AFF]/15 selection:text-[#0055CC]">
         {children}
       </body>
     </html>

@@ -139,16 +139,13 @@ export default function ReportIssueForm() {
   };
 
   const fieldClasses =
-    "w-full rounded-lg border border-slate-800 bg-[#07101d] px-2.5 py-2 text-[12px] text-slate-100 placeholder:text-slate-500 focus:border-cyan-500/50 focus:outline-none";
+    "w-full rounded-[12px] border border-black/[0.08] bg-[#F5F5F7] px-3.5 py-2.5 text-[13.5px] text-[#1D1D1F] placeholder:text-[#86868B] transition-colors focus:border-[#007AFF] focus:bg-white focus:outline-none";
 
   return (
-    <form onSubmit={submit} className="flex flex-col gap-4">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <div className="flex flex-col gap-1 sm:col-span-2">
-          <label
-            htmlFor="issue-title"
-            className="font-mono text-[10px] font-semibold tracking-wider text-slate-400 uppercase"
-          >
+    <form onSubmit={submit} className="flex flex-col gap-5">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="flex flex-col gap-1.5 sm:col-span-2">
+          <label htmlFor="issue-title" className="text-[12.5px] font-medium text-[#1D1D1F]">
             Issue title *
           </label>
           <input
@@ -161,15 +158,12 @@ export default function ReportIssueForm() {
             className={fieldClasses}
           />
           {errors.title ? (
-            <span className="text-[10px] text-red-300">{errors.title}</span>
+            <span className="text-[12px] text-[#C9241B]">{errors.title}</span>
           ) : null}
         </div>
 
-        <div className="flex flex-col gap-1">
-          <label
-            htmlFor="issue-category"
-            className="font-mono text-[10px] font-semibold tracking-wider text-slate-400 uppercase"
-          >
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="issue-category" className="text-[12.5px] font-medium text-[#1D1D1F]">
             Category *
           </label>
           <select
@@ -180,21 +174,18 @@ export default function ReportIssueForm() {
             className={fieldClasses}
           >
             {ISSUE_CATEGORIES.map((value) => (
-              <option key={value} value={value} className="bg-[#07101d]">
+              <option key={value} value={value}>
                 {CATEGORY_LABELS[value]}
               </option>
             ))}
           </select>
           {errors.category ? (
-            <span className="text-[10px] text-red-300">{errors.category}</span>
+            <span className="text-[12px] text-[#C9241B]">{errors.category}</span>
           ) : null}
         </div>
 
-        <div className="flex flex-col gap-1">
-          <label
-            htmlFor="issue-sector"
-            className="font-mono text-[10px] font-semibold tracking-wider text-slate-400 uppercase"
-          >
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="issue-sector" className="text-[12.5px] font-medium text-[#1D1D1F]">
             Sector *
           </label>
           <select
@@ -205,27 +196,22 @@ export default function ReportIssueForm() {
             className={fieldClasses}
           >
             {SECTORS.map((sector) => (
-              <option key={sector.id} value={sector.id} className="bg-[#07101d]">
+              <option key={sector.id} value={sector.id}>
                 {sector.code} — {sector.name} ({sector.ward})
               </option>
             ))}
           </select>
           {errors.sectorId ? (
-            <span className="text-[10px] text-red-300">{errors.sectorId}</span>
+            <span className="text-[12px] text-[#C9241B]">{errors.sectorId}</span>
           ) : null}
         </div>
 
-        <div className="flex flex-col gap-1.5 sm:col-span-2">
-          <label
-            htmlFor="issue-location"
-            className="font-mono text-[10px] font-semibold tracking-wider text-slate-400 uppercase"
-          >
+        <div className="flex flex-col gap-2 sm:col-span-2">
+          <label htmlFor="issue-location" className="text-[12.5px] font-medium text-[#1D1D1F]">
             Street or landmark *
           </label>
           <div className="flex flex-wrap items-center gap-1.5">
-            <span className="font-mono text-[9px] tracking-wider text-slate-500 uppercase">
-              Known corridors
-            </span>
+            <span className="text-[12px] text-[#6E6E73]">Quick select:</span>
             {CORRIDOR_PRESETS.map((preset) => {
               const active = locationKey === preset.locationKey;
               return (
@@ -237,10 +223,10 @@ export default function ReportIssueForm() {
                     setSectorId(preset.sectorId);
                     setLocationKey(preset.locationKey);
                   }}
-                  className={`rounded-full border px-2 py-0.5 font-mono text-[10px] transition-colors cursor-pointer ${
+                  className={`rounded-full px-3 py-1 text-[12px] font-medium transition-colors cursor-pointer ${
                     active
-                      ? "border-cyan-400/60 bg-cyan-500/15 text-cyan-200"
-                      : "border-slate-700 text-slate-300 hover:border-cyan-500/40 hover:text-cyan-200"
+                      ? "bg-[#1D1D1F] text-white"
+                      : "bg-[#F0F2F5] text-[#48484A] hover:bg-black/[0.08]"
                   }`}
                 >
                   {preset.label}
@@ -261,16 +247,13 @@ export default function ReportIssueForm() {
             className={fieldClasses}
           />
           {errors.location ? (
-            <span className="text-[10px] text-red-300">{errors.location}</span>
+            <span className="text-[12px] text-[#C9241B]">{errors.location}</span>
           ) : null}
         </div>
 
-        <div className="flex flex-col gap-1 sm:col-span-2">
-          <label
-            htmlFor="issue-description"
-            className="font-mono text-[10px] font-semibold tracking-wider text-slate-400 uppercase"
-          >
-            What is wrong? *
+        <div className="flex flex-col gap-1.5 sm:col-span-2">
+          <label htmlFor="issue-description" className="text-[12.5px] font-medium text-[#1D1D1F]">
+            Description *
           </label>
           <textarea
             id="issue-description"
@@ -279,33 +262,39 @@ export default function ReportIssueForm() {
             onChange={(event) => setDescription(event.target.value)}
             rows={4}
             maxLength={2000}
-            placeholder="Describe what you can see, how long it has been like this, and who it affects."
+            placeholder="Describe what you observe, how long it has persisted, and who it affects."
             className={`${fieldClasses} resize-y`}
           />
-          <span className="flex items-center justify-between font-mono text-[9px] text-slate-500">
-            <span>{errors.description ? <span className="text-red-300">{errors.description}</span> : "Be specific — this becomes the permanent record."}</span>
-            <span>{description.length}/2000</span>
+          <span className="flex items-center justify-between text-[12px] text-[#6E6E73]">
+            <span>
+              {errors.description ? (
+                <span className="text-[#C9241B]">{errors.description}</span>
+              ) : (
+                "Be specific — this becomes part of the permanent civic record."
+              )}
+            </span>
+            <span className="tabular-nums">{description.length}/2000</span>
           </span>
         </div>
       </div>
 
       {/* Photo attachment */}
-      <div className="flex flex-col gap-1.5">
-        <span className="font-mono text-[10px] font-semibold tracking-wider text-slate-400 uppercase">
+      <div className="flex flex-col gap-2">
+        <span className="text-[12.5px] font-medium text-[#1D1D1F]">
           Photograph (optional)
         </span>
 
         {photo ? (
-          <div className="flex items-start gap-3 rounded-lg border border-slate-800 bg-[#08101d] p-2.5">
+          <div className="flex items-start gap-3 rounded-[14px] border border-black/[0.06] bg-[#F5F5F7] p-3">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={photo.dataUrl}
               alt="Attached photograph preview"
-              className="h-20 w-32 shrink-0 rounded border border-slate-700 object-cover"
+              className="h-20 w-32 shrink-0 rounded-xl border border-black/[0.08] object-cover"
             />
             <div className="min-w-0 flex-1">
-              <p className="truncate text-[11px] font-semibold text-slate-100">{photo.name}</p>
-              <p className="mt-0.5 font-mono text-[9px] text-slate-500">
+              <p className="truncate text-[13px] font-semibold text-[#1D1D1F]">{photo.name}</p>
+              <p className="mt-0.5 text-[12px] text-[#6E6E73]">
                 Stored with the report as unverified citizen evidence.
               </p>
               <button
@@ -314,14 +303,14 @@ export default function ReportIssueForm() {
                   setPhoto(null);
                   if (fileInputRef.current) fileInputRef.current.value = "";
                 }}
-                className="mt-1.5 inline-flex items-center gap-1 rounded border border-slate-700 px-1.5 py-0.5 font-mono text-[10px] text-slate-300 hover:border-red-400/50 hover:text-red-200 cursor-pointer"
+                className="mt-2 inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 text-[11.5px] font-medium text-[#1D1D1F] shadow-sm hover:text-[#C9241B] cursor-pointer"
               >
                 <X className="h-3 w-3" /> Remove
               </button>
             </div>
           </div>
         ) : (
-          <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-slate-700 bg-slate-950/40 px-3 py-4 font-mono text-[11px] text-slate-400 transition-colors hover:border-cyan-500/50 hover:text-cyan-200">
+          <label className="flex cursor-pointer items-center justify-center gap-2 rounded-[14px] border border-dashed border-black/[0.14] bg-[#F5F5F7]/70 px-4 py-5 text-[13px] font-medium text-[#6E6E73] transition-colors hover:border-[#007AFF]/50 hover:text-[#007AFF]">
             <Camera className="h-4 w-4" />
             Attach a photograph (JPG or PNG, max 1.5 MB)
             <input
@@ -334,33 +323,33 @@ export default function ReportIssueForm() {
           </label>
         )}
         {errors.photo ? (
-          <span className="text-[10px] text-red-300">{errors.photo}</span>
+          <span className="text-[12px] text-[#C9241B]">{errors.photo}</span>
         ) : null}
       </div>
 
       {formError ? (
-        <p className="flex items-start gap-1.5 rounded-lg border border-red-500/40 bg-red-950/30 px-2.5 py-2 text-[11px] text-red-200">
-          <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+        <p className="flex items-start gap-2 rounded-[14px] border border-[#FF3B30]/20 bg-[#FF3B30]/[0.08] px-3.5 py-2.5 text-[13px] text-[#C9241B]">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
           {formError}
         </p>
       ) : null}
 
-      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-800 pt-3">
-        <p className="flex items-center gap-1.5 font-mono text-[10px] text-slate-500">
-          <CheckCircle2 className="h-3 w-3 text-emerald-400" />
-          Reports are permanent — they cannot be deleted, only updated.
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-black/[0.06] pt-4">
+        <p className="flex items-center gap-1.5 text-[12px] text-[#6E6E73]">
+          <CheckCircle2 className="h-3.5 w-3.5 text-[#34C759]" />
+          Reports are permanent — updates append rather than overwrite.
         </p>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2.5">
           <Link
             href="/civic-issues"
-            className="rounded-lg border border-slate-700 px-3 py-2 font-mono text-[11px] text-slate-300 hover:border-cyan-500/40 hover:text-cyan-200"
+            className="rounded-full border border-black/[0.08] bg-white px-4 py-2 text-[13px] font-medium text-[#1D1D1F] hover:bg-[#F5F5F7]"
           >
             Cancel
           </Link>
           <button
             type="submit"
             disabled={submitting}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-300/60 bg-gradient-to-r from-cyan-500 to-sky-500 px-4 py-2 font-mono text-[11px] font-bold tracking-wider text-slate-950 uppercase shadow-[0_0_24px_-6px_rgba(34,211,238,0.7)] transition-all hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer"
+            className="inline-flex items-center gap-1.5 rounded-full bg-[#007AFF] px-5 py-2 text-[13px] font-semibold text-white shadow-[0_2px_8px_-2px_rgba(0,122,255,0.45)] transition-all hover:bg-[#0066D6] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer"
           >
             {submitting ? (
               <>

@@ -64,13 +64,13 @@ export function daysBetween(a: string, b: string): number {
 }
 
 /* ------------------------------------------------------------------ */
-/* Tones — the single colour vocabulary of the design system           */
+/* Tones — Apple-inspired semantic light palette                       */
 /* ------------------------------------------------------------------ */
 
 export type Tone = "danger" | "warn" | "ok" | "info" | "neutral";
 
 export interface ToneStyle {
-  /** Raw hex for the 3D scene and inline styles. */
+  /** Raw hex for the 3D scene and inline chart styles. */
   hex: string;
   label: string;
   text: string;
@@ -82,49 +82,49 @@ export interface ToneStyle {
 
 export const TONES: Record<Tone, ToneStyle> = {
   danger: {
-    hex: "#ef4444",
-    label: "text-red-300",
-    text: "text-red-200",
-    badge: "border-red-500/40 bg-red-500/15 text-red-200",
-    dot: "bg-red-500 shadow-[0_0_10px_#ef4444]",
-    bar: "bg-red-500 shadow-[0_0_12px_rgba(239,68,68,0.6)]",
-    ring: "border-red-400/70 bg-red-950/90 text-red-100 shadow-[0_0_16px_rgba(239,68,68,0.45)]",
+    hex: "#FF3B30",
+    label: "text-[#C9241B]",
+    text: "text-[#C9241B]",
+    badge: "border-[#FF3B30]/20 bg-[#FF3B30]/[0.09] text-[#C9241B]",
+    dot: "bg-[#FF3B30]",
+    bar: "bg-[#FF3B30]",
+    ring: "border-[#FF3B30]/35 bg-white/95 text-[#1D1D1F] shadow-[0_6px_18px_-4px_rgba(255,59,48,0.28)]",
   },
   warn: {
-    hex: "#f59e0b",
-    label: "text-amber-300",
-    text: "text-amber-200",
-    badge: "border-amber-500/40 bg-amber-500/15 text-amber-200",
-    dot: "bg-amber-400 shadow-[0_0_10px_#f59e0b]",
-    bar: "bg-amber-400 shadow-[0_0_12px_rgba(245,158,11,0.6)]",
-    ring: "border-amber-400/70 bg-amber-950/90 text-amber-100 shadow-[0_0_16px_rgba(245,158,11,0.45)]",
+    hex: "#FF9500",
+    label: "text-[#B25000]",
+    text: "text-[#B25000]",
+    badge: "border-[#FF9500]/25 bg-[#FF9500]/[0.11] text-[#B25000]",
+    dot: "bg-[#FF9500]",
+    bar: "bg-[#FF9500]",
+    ring: "border-[#FF9500]/40 bg-white/95 text-[#1D1D1F] shadow-[0_6px_18px_-4px_rgba(255,149,0,0.28)]",
   },
   ok: {
-    hex: "#10b981",
-    label: "text-emerald-300",
-    text: "text-emerald-200",
-    badge: "border-emerald-500/40 bg-emerald-500/15 text-emerald-200",
-    dot: "bg-emerald-400 shadow-[0_0_10px_#10b981]",
-    bar: "bg-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.6)]",
-    ring: "border-emerald-400/70 bg-emerald-950/90 text-emerald-100 shadow-[0_0_16px_rgba(16,185,129,0.45)]",
+    hex: "#34C759",
+    label: "text-[#1A7F37]",
+    text: "text-[#1A7F37]",
+    badge: "border-[#34C759]/25 bg-[#34C759]/[0.11] text-[#1A7F37]",
+    dot: "bg-[#34C759]",
+    bar: "bg-[#34C759]",
+    ring: "border-[#34C759]/40 bg-white/95 text-[#1D1D1F] shadow-[0_6px_18px_-4px_rgba(52,199,89,0.25)]",
   },
   info: {
-    hex: "#22d3ee",
-    label: "text-cyan-300",
-    text: "text-cyan-200",
-    badge: "border-cyan-500/40 bg-cyan-500/15 text-cyan-200",
-    dot: "bg-cyan-400 shadow-[0_0_10px_#22d3ee]",
-    bar: "bg-cyan-400 shadow-[0_0_12px_rgba(34,211,238,0.6)]",
-    ring: "border-cyan-400/70 bg-cyan-950/90 text-cyan-100 shadow-[0_0_16px_rgba(34,211,238,0.45)]",
+    hex: "#007AFF",
+    label: "text-[#0055CC]",
+    text: "text-[#0055CC]",
+    badge: "border-[#007AFF]/20 bg-[#007AFF]/[0.09] text-[#0055CC]",
+    dot: "bg-[#007AFF]",
+    bar: "bg-[#007AFF]",
+    ring: "border-[#007AFF]/35 bg-white/95 text-[#1D1D1F] shadow-[0_6px_18px_-4px_rgba(0,122,255,0.25)]",
   },
   neutral: {
-    hex: "#94a3b8",
-    label: "text-slate-300",
-    text: "text-slate-200",
-    badge: "border-slate-600/60 bg-slate-500/15 text-slate-200",
-    dot: "bg-slate-400",
-    bar: "bg-slate-500",
-    ring: "border-slate-500/70 bg-slate-900/90 text-slate-100",
+    hex: "#86868B",
+    label: "text-[#6E6E73]",
+    text: "text-[#1D1D1F]",
+    badge: "border-black/[0.08] bg-black/[0.045] text-[#48484A]",
+    dot: "bg-[#86868B]",
+    bar: "bg-[#86868B]",
+    ring: "border-black/15 bg-white/95 text-[#1D1D1F] shadow-md",
   },
 };
 

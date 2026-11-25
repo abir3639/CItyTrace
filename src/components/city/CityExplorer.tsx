@@ -6,30 +6,32 @@ import {
   ArrowRight,
   Building2,
   CalendarClock,
-  Eye,
+  Compass,
   FileText,
-  Layers,
-  Map as MapIcon,
+  Landmark,
   MapPin,
+  Minus,
   Pause,
   Play,
+  Plus,
   RotateCcw,
   ShieldAlert,
   Sparkles,
   Wrench,
+  X,
 } from "lucide-react";
 import CityScene from "./CityScene";
 import {
   CITY_MAPS,
   CIVIC_LANDMARKS,
+  DHAKA_BUILDINGS,
   type CityMapId,
   type CityRenderMode,
   type CivicLandmark,
 } from "./cityMapsData";
 import { EvidenceGallery } from "@/components/evidence/EvidenceTile";
-import { Panel, PanelHeader } from "@/components/ui/Panel";
 import { Badge } from "@/components/ui/Badge";
-import { EmptyState, ProgressBar, SpendBar } from "@/components/ui/Data";
+import { ProgressBar, SpendBar } from "@/components/ui/Data";
 import { SECTORS, getProject, getSector } from "@/data";
 import {
   CATEGORY_LABELS,
@@ -46,47 +48,44 @@ import {
   formatDate,
   formatPercent,
   issueStatusTone,
+  mapFeatureTone,
   projectStatusTone,
   severityTone,
 } from "@/utils/formatters";
 
-type FeatureFilter = "all" | "issues" | "active" | "completed" | "delayed";
+type FeatureFilter = "all" | "issues" | "delayed" | "active" | "completed";
 
 const FILTER_OPTIONS: { id: FeatureFilter; label: string }[] = [
   { id: "all", label: "All" },
-  { id: "issues", label: "Infrastructure issues" },
-  { id: "active", label: "Active projects" },
-  { id: "completed", label: "Completed projects" },
-  { id: "delayed", label: "Delayed projects" },
+  { id: "issues", label: "Issues" },
+  { id: "delayed", label: "Delayed" },
+  { id: "active", label: "Active" },
+  { id: "completed", label: "Done" },
 ];
 
 const RENDER_MODES: { id: CityRenderMode; label: string }[] = [
-  { id: "twin", label: "Architectural Twin" },
-  { id: "heatmap", label: "Risk Heatmap" },
-  { id: "xray", label: "Utility X-Ray" },
+  { id: "twin", label: "Map" },
+  { id: "heatmap", label: "Heatmap" },
+  { id: "xray", label: "X-Ray" },
 ];
 
-const QUICK_TARGETS: {
+const LOCATION_SHORTCUTS: {
   label: string;
-  sub: string;
   preferredIds: string[];
   tone: "danger" | "warn" | "ok";
 }[] = [
   {
-    label: "Begum Rokeya Link Road",
-    sub: "3× repaired",
+    label: "Link Rd 3×",
     preferredIds: ["issue:ISS-003", "project:P-R01"],
     tone: "danger",
   },
   {
-    label: "West Canal Culvert",
-    sub: "Delayed",
+    label: "Canal Culvert",
     preferredIds: ["project:P-D02", "issue:ISS-005"],
     tone: "warn",
   },
   {
-    label: "Civic Blvd Smart LED",
-    sub: "Verified",
+    label: "Smart LED",
     preferredIds: ["project:P-L03"],
     tone: "ok",
   },
@@ -126,8 +125,11 @@ export default function CityExplorer({
   const [renderMode, setRenderMode] = useState<CityRenderMode>("twin");
   const [selectedId, setSelectedId] = useState<string | null>(initialFeatureId);
   const [selectedLandmarkId, setSelectedLandmarkId] = useState<string | null>(null);
+  const [landmarksMenuOpen, setLandmarksMenuOpen] = useState(false);
   const [autoRotate, setAutoRotate] = useState(true);
   const [resetSignal, setResetSignal] = useState(0);
+  const [zoomSignal, setZoomSignal] = useState<{ delta: number; seq: number } | null>(null);
+  const [showRadar, setShowRadar] = useState(false);
   const [filter, setFilter] = useState<FeatureFilter>("all");
   const [sectorFilter, setSectorFilter] = useState<string | null>(null);
 
@@ -171,6 +173,7 @@ export default function CityExplorer({
     setSelectedId(id);
     if (id) {
       setSelectedLandmarkId(null);
+      setLandmarksMenuOpen(false);
       setAutoRotate(false);
     }
   }, []);
@@ -179,6 +182,7 @@ export default function CityExplorer({
     setSelectedLandmarkId(landmarkId);
     if (landmarkId) {
       setSelectedId(null);
+      setLandmarksMenuOpen(false);
       setAutoRotate(false);
     }
   }, []);
@@ -188,10 +192,11 @@ export default function CityExplorer({
     setSectorFilter(null);
     setSelectedId(null);
     setSelectedLandmarkId(null);
+    setLandmarksMenuOpen(false);
     setAutoRotate(nextMapId === "metro-twin");
   }, []);
 
-  const focusQuickTarget = useCallback(
+  const focusShortcut = useCallback(
     (preferredIds: string[]) => {
       const match =
         visibleFeatures.find((feature) => preferredIds.includes(feature.id)) ??
@@ -206,301 +211,381 @@ export default function CityExplorer({
     [features, visibleFeatures, handleSelect]
   );
 
+  const closeInspector = useCallback(() => {
+    setSelectedId(null);
+    setSelectedLandmarkId(null);
+  }, []);
+
+  const hasInspectorOpen = Boolean(selected || selectedLandmark);
+
   return (
-    <div className="flex flex-col gap-4">
-      {/* 4-Map 3D District Atlas Switcher */}
-      <div
-        role="group"
-        aria-label="3D District Map Atlas"
-        className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4"
-      >
-        {CITY_MAPS.map((map) => {
-          const active = mapId === map.id;
-          return (
+    <div className="flex flex-col gap-3">
+      {/* Compact hero header row: title + segmented 3D Map switcher */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-baseline gap-2.5">
+          <h1 className="text-[22px] font-semibold tracking-[-0.025em] text-[#1D1D1F] sm:text-[24px]">
+            City Explorer
+          </h1>
+          <span className="text-[12.5px] text-[#6E6E73] tabular-nums">
+            {visibleFeatures.length} records · {DHAKA_BUILDINGS.length} buildings
+          </span>
+        </div>
+
+        <div
+          role="group"
+          aria-label="3D District Map Selector"
+          className="ct-segmented overflow-x-auto max-w-full"
+        >
+          {CITY_MAPS.map((map) => (
             <button
               key={map.id}
               type="button"
-              aria-pressed={active}
+              aria-pressed={mapId === map.id}
               onClick={() => handleSelectMap(map.id)}
-              className={`flex flex-col gap-1 rounded-xl border px-3 py-2.5 text-left transition-colors cursor-pointer ${
-                active
-                  ? "border-cyan-400/70 bg-cyan-500/15 shadow-[0_0_24px_-10px_rgba(34,211,238,0.65)]"
-                  : "border-slate-800 bg-[#08101d] hover:border-cyan-500/40 hover:bg-[#0c182b]"
-              }`}
+              title={`${map.title} — ${map.subtitle}`}
+              className="ct-segmented-item whitespace-nowrap"
             >
-              <div className="flex items-center justify-between gap-2">
-                <span className="inline-flex items-center gap-1.5 font-mono text-[10px] font-semibold tracking-wider text-cyan-300 uppercase">
-                  <MapIcon className="h-3 w-3" />
-                  {map.code}
-                </span>
-                {active ? (
-                  <span className="rounded-full bg-cyan-400/20 px-1.5 py-0.5 font-mono text-[9px] font-semibold text-cyan-200 uppercase">
-                    Active
-                  </span>
-                ) : null}
-              </div>
-              <p className="text-xs font-bold text-slate-100">{map.title}</p>
-              <p className="font-mono text-[10px] text-slate-400">{map.subtitle}</p>
+              {map.shortLabel}
             </button>
-          );
-        })}
+          ))}
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-        <div className="flex flex-col gap-3 xl:col-span-2">
-          <div className="flex flex-col gap-2">
-            {/* Status & category filters + Render Mode toggle */}
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex flex-wrap items-center gap-1.5">
-                {FILTER_OPTIONS.map((option) => {
-                  const count = features.filter((feature) =>
-                    matchesFilter(feature, option.id)
-                  ).length;
-                  const active = filter === option.id;
-                  return (
-                    <button
-                      key={option.id}
-                      type="button"
-                      onClick={() => setFilter(option.id)}
-                      aria-pressed={active}
-                      className={`rounded-full border px-2.5 py-1 font-mono text-[10px] transition-colors cursor-pointer ${
-                        active
-                          ? "border-cyan-400/60 bg-cyan-500/15 text-cyan-200"
-                          : "border-slate-700 text-slate-300 hover:border-cyan-500/40 hover:text-cyan-200"
-                      }`}
-                    >
-                      {option.label} ({count})
-                    </button>
-                  );
-                })}
-              </div>
+      {/* Hero Full-Viewport 3D Map Surface */}
+      <div className="relative h-[calc(100vh-158px)] min-h-[540px] w-full overflow-hidden rounded-[24px] border border-black/[0.07] bg-[#EEF1F6] shadow-[0_12px_40px_-14px_rgba(15,23,42,0.14)]">
+        <CityScene
+          mapId={mapId}
+          renderMode={renderMode}
+          features={visibleFeatures}
+          selectedId={selectedId}
+          selectedLandmarkId={selectedLandmarkId}
+          onSelect={handleSelect}
+          onSelectLandmark={handleSelectLandmark}
+          autoRotate={autoRotate}
+          resetSignal={resetSignal}
+          zoomSignal={zoomSignal}
+          sectorFocus={sectorFocus}
+          showRadar={showRadar}
+        />
 
-              <div
-                role="group"
-                aria-label="3D render layer mode"
-                className="inline-flex items-center gap-1 rounded-lg border border-slate-700/80 bg-[#07101d] p-0.5"
-              >
-                <Eye className="ml-1.5 h-3 w-3 text-cyan-400" aria-hidden="true" />
-                {RENDER_MODES.map((mode) => {
-                  const active = renderMode === mode.id;
-                  return (
-                    <button
-                      key={mode.id}
-                      type="button"
-                      aria-pressed={active}
-                      onClick={() => setRenderMode(mode.id)}
-                      className={`rounded-md px-2 py-1 font-mono text-[10px] transition-colors cursor-pointer ${
-                        active
-                          ? "bg-cyan-500/20 font-semibold text-cyan-200"
-                          : "text-slate-400 hover:text-slate-200"
-                      }`}
-                    >
-                      {mode.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Sector pills, Quick focus & camera controls */}
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span className="font-mono text-[9px] tracking-wider text-slate-500 uppercase">
-                  Sector
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setSectorFilter(null)}
-                  aria-pressed={sectorFilter === null}
-                  className={`rounded-full border px-2 py-0.5 font-mono text-[10px] transition-colors cursor-pointer ${
-                    sectorFilter === null
-                      ? "border-cyan-400/60 bg-cyan-500/15 text-cyan-200"
-                      : "border-slate-700 text-slate-300 hover:border-cyan-500/40"
-                  }`}
-                >
-                  All
-                </button>
-                {SECTORS.map((sector) => (
+        {/* Floating Top-Left Consolidated Toolbar: Filters + Sector + Shortcuts */}
+        <div className="pointer-events-none absolute top-3 right-3 left-3 z-20 flex flex-wrap items-start justify-between gap-2">
+          <div className="ct-glass-pill pointer-events-auto flex max-w-full flex-wrap items-center gap-1.5 rounded-2xl px-2.5 py-1.5">
+            {/* Status filter pills */}
+            <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Filter map markers">
+              {FILTER_OPTIONS.map((option) => {
+                const active = filter === option.id;
+                return (
                   <button
-                    key={sector.id}
+                    key={option.id}
                     type="button"
-                    onClick={() => setSectorFilter(sector.id)}
-                    aria-pressed={sectorFilter === sector.id}
-                    title={`${sector.name} — ${sector.ward}`}
-                    className={`rounded-full border px-2 py-0.5 font-mono text-[10px] transition-colors cursor-pointer ${
-                      sectorFilter === sector.id
-                        ? "border-cyan-400/60 bg-cyan-500/15 text-cyan-200"
-                        : "border-slate-700 text-slate-300 hover:border-cyan-500/40"
+                    aria-pressed={active}
+                    onClick={() => setFilter(option.id)}
+                    className={`rounded-full px-2.5 py-1 text-[12px] font-medium transition-all cursor-pointer active:scale-[0.97] ${
+                      active
+                        ? "bg-[#1D1D1F] text-white shadow-sm"
+                        : "text-[#6E6E73] hover:bg-black/[0.05] hover:text-[#1D1D1F]"
                     }`}
                   >
-                    {sector.code}
+                    {option.label}
                   </button>
-                ))}
-              </div>
+                );
+              })}
+            </div>
 
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span className="font-mono text-[9px] tracking-wider text-slate-500 uppercase">
-                  Quick focus
-                </span>
-                {QUICK_TARGETS.map((target) => {
-                  const isTargetSelected = Boolean(
-                    selectedId && target.preferredIds.includes(selectedId)
-                  );
-                  return (
-                    <button
-                      key={target.label}
-                      type="button"
-                      onClick={() => focusQuickTarget(target.preferredIds)}
-                      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 font-mono text-[10px] transition-colors cursor-pointer ${
-                        isTargetSelected
-                          ? "border-cyan-400/60 bg-cyan-500/15 text-cyan-100"
-                          : "border-slate-700/90 bg-slate-900/60 text-slate-300 hover:border-cyan-500/40 hover:text-cyan-200"
-                      }`}
-                    >
-                      <span className={`h-1.5 w-1.5 rounded-full ${TONES[target.tone].dot}`} />
-                      <span>{target.label}</span>
-                      <span className="text-slate-500">· {target.sub}</span>
-                    </button>
-                  );
-                })}
-              </div>
+            <span className="hidden h-4 w-px bg-black/[0.1] sm:inline-block" aria-hidden="true" />
 
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setAutoRotate((current) => !current)}
-                  aria-pressed={autoRotate}
-                  className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 font-mono text-[11px] transition-colors cursor-pointer ${
-                    autoRotate
-                      ? "border-cyan-400/50 bg-cyan-500/15 text-cyan-200"
-                      : "border-slate-700/80 bg-slate-900/80 text-slate-300 hover:border-cyan-500/40 hover:text-cyan-200"
-                  }`}
-                >
-                  {autoRotate ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
-                  {autoRotate ? "Orbit on" : "Orbit off"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setResetSignal((value) => value + 1)}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700/80 bg-slate-900/80 px-2.5 py-1.5 font-mono text-[11px] text-slate-200 transition-colors hover:border-cyan-400/50 hover:text-cyan-100 cursor-pointer"
-                >
-                  <RotateCcw className="h-3.5 w-3.5 text-cyan-400" />
-                  Reset view
-                </button>
-              </div>
+            {/* Compact sector dropdown */}
+            <label className="sr-only" htmlFor="explorer-sector-select">
+              Filter by sector
+            </label>
+            <select
+              id="explorer-sector-select"
+              value={sectorFilter ?? ""}
+              onChange={(event) => setSectorFilter(event.target.value || null)}
+              className="rounded-full bg-black/[0.045] px-2.5 py-1 text-[12px] font-medium text-[#1D1D1F] transition-colors hover:bg-black/[0.07] focus:outline-none cursor-pointer"
+            >
+              <option value="">All sectors</option>
+              {SECTORS.map((sector) => (
+                <option key={sector.id} value={sector.id}>
+                  {sector.code} · {sector.name}
+                </option>
+              ))}
+            </select>
+
+            <span className="hidden h-4 w-px bg-black/[0.1] md:inline-block" aria-hidden="true" />
+
+            {/* Compact location shortcuts */}
+            <div className="hidden items-center gap-1 md:flex">
+              {LOCATION_SHORTCUTS.map((shortcut) => {
+                const isSelected = Boolean(
+                  selectedId && shortcut.preferredIds.includes(selectedId)
+                );
+                return (
+                  <button
+                    key={shortcut.label}
+                    type="button"
+                    onClick={() => focusShortcut(shortcut.preferredIds)}
+                    className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11.5px] font-medium transition-all cursor-pointer active:scale-[0.97] ${
+                      isSelected
+                        ? "bg-[#007AFF]/[0.12] text-[#0055CC]"
+                        : "text-[#1D1D1F]/80 hover:bg-black/[0.05]"
+                    }`}
+                  >
+                    <span className={`h-1.5 w-1.5 rounded-full ${TONES[shortcut.tone].dot}`} />
+                    {shortcut.label}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
-          <CityScene
-            mapId={mapId}
-            renderMode={renderMode}
-            features={visibleFeatures}
-            selectedId={selectedId}
-            selectedLandmarkId={selectedLandmarkId}
-            onSelect={handleSelect}
-            onSelectLandmark={handleSelectLandmark}
-            autoRotate={autoRotate}
-            resetSignal={resetSignal}
-            sectorFocus={sectorFocus}
-          />
+          {/* Top-right compact Landmarks trigger when inspector is closed */}
+          {!hasInspectorOpen ? (
+            <div className="pointer-events-auto relative">
+              <button
+                type="button"
+                aria-expanded={landmarksMenuOpen}
+                onClick={() => setLandmarksMenuOpen((prev) => !prev)}
+                className="ct-glass-pill inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-medium text-[#1D1D1F] transition-all hover:bg-white cursor-pointer active:scale-[0.98]"
+              >
+                <Landmark className="h-3.5 w-3.5 text-[#007AFF]" />
+                <span>Landmarks ({CIVIC_LANDMARKS.length})</span>
+              </button>
+
+              {landmarksMenuOpen ? (
+                <div className="ct-glass ct-fade-up absolute right-0 mt-2 w-72 overflow-hidden rounded-[20px] p-1.5">
+                  <p className="px-2.5 py-1.5 text-[11.5px] font-semibold text-[#6E6E73]">
+                    Jump to a 3D civic landmark
+                  </p>
+                  <ul className="ct-scroll max-h-72 space-y-0.5 overflow-y-auto">
+                    {CIVIC_LANDMARKS.map((lm) => (
+                      <li key={lm.id}>
+                        <button
+                          type="button"
+                          onClick={() => handleSelectLandmark(lm.id)}
+                          className="flex w-full items-center justify-between gap-2 rounded-xl px-2.5 py-2 text-left transition-colors hover:bg-black/[0.05] cursor-pointer"
+                        >
+                          <span className="min-w-0">
+                            <span className="block truncate text-[12.5px] font-medium text-[#1D1D1F]">
+                              {lm.name}
+                            </span>
+                            <span className="block text-[11px] text-[#6E6E73]">
+                              {lm.kind} · {lm.sectorId}
+                            </span>
+                          </span>
+                          <ArrowRight className="h-3.5 w-3.5 shrink-0 text-[#007AFF]" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
-        <div className="xl:col-span-1">
+        {/* Floating Bottom-Left Apple Maps Legend + Overview Radar Toggle */}
+        <div className="pointer-events-none absolute bottom-3 left-3 z-20 flex flex-wrap items-center gap-2">
+          <div className="ct-glass-pill pointer-events-auto flex flex-wrap items-center gap-3 rounded-full px-3 py-1.5 text-[11.5px] font-medium text-[#1D1D1F]">
+            {(
+              [
+                ["unresolved", "Issue"],
+                ["delayed", "Delayed"],
+                ["active", "Active / Done"],
+              ] as const
+            ).map(([state, label]) => (
+              <span key={state} className="inline-flex items-center gap-1.5">
+                <span className={`h-2 w-2 rounded-full ${TONES[mapFeatureTone(state)].dot}`} />
+                {label}
+              </span>
+            ))}
+            <span className="hidden items-center gap-1.5 sm:inline-flex">
+              <span className="h-2 w-2 rounded-full border border-[#007AFF] bg-[#007AFF]/20" />
+              Landmark
+            </span>
+          </div>
+
+          <button
+            type="button"
+            aria-pressed={showRadar}
+            onClick={() => setShowRadar((prev) => !prev)}
+            className={`ct-glass-pill pointer-events-auto hidden items-center gap-1.5 rounded-full px-3 py-1.5 text-[11.5px] font-medium transition-all sm:inline-flex cursor-pointer active:scale-[0.98] ${
+              showRadar ? "text-[#007AFF]" : "text-[#1D1D1F]"
+            }`}
+          >
+            <Compass className="h-3.5 w-3.5 text-[#007AFF]" />
+            Radar
+          </button>
+        </div>
+
+        {/* Floating Bottom-Right Layer Mode & Camera Controls */}
+        <div
+          className={`pointer-events-none absolute right-3 bottom-3 z-20 flex flex-wrap items-end gap-2 transition-all duration-200 ${
+            hasInspectorOpen ? "lg:right-[364px]" : ""
+          }`}
+        >
+          <div
+            role="group"
+            aria-label="3D render mode"
+            className="ct-glass-pill pointer-events-auto inline-flex items-center gap-0.5 rounded-full p-1"
+          >
+            {RENDER_MODES.map((mode) => {
+              const active = renderMode === mode.id;
+              return (
+                <button
+                  key={mode.id}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => setRenderMode(mode.id)}
+                  className={`rounded-full px-2.5 py-1 text-[11.5px] font-medium transition-all cursor-pointer ${
+                    active
+                      ? "bg-[#007AFF] text-white shadow-sm"
+                      : "text-[#6E6E73] hover:text-[#1D1D1F]"
+                  }`}
+                >
+                  {mode.label}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="ct-glass-pill pointer-events-auto flex items-center divide-x divide-black/[0.07] overflow-hidden rounded-full">
+            <button
+              type="button"
+              onClick={() =>
+                setZoomSignal((prev) => ({ delta: -3.2, seq: (prev?.seq ?? 0) + 1 }))
+              }
+              aria-label="Zoom in"
+              title="Zoom in"
+              className="p-2 text-[#1D1D1F] transition-colors hover:bg-black/[0.05] cursor-pointer"
+            >
+              <Plus className="h-3.5 w-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                setZoomSignal((prev) => ({ delta: 3.2, seq: (prev?.seq ?? 0) + 1 }))
+              }
+              aria-label="Zoom out"
+              title="Zoom out"
+              className="p-2 text-[#1D1D1F] transition-colors hover:bg-black/[0.05] cursor-pointer"
+            >
+              <Minus className="h-3.5 w-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setAutoRotate((current) => !current)}
+              aria-label={autoRotate ? "Pause orbit rotation" : "Start orbit rotation"}
+              title={autoRotate ? "Pause orbit" : "Resume orbit"}
+              className={`p-2 transition-colors hover:bg-black/[0.05] cursor-pointer ${
+                autoRotate ? "text-[#007AFF]" : "text-[#6E6E73]"
+              }`}
+            >
+              {autoRotate ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+            </button>
+            <button
+              type="button"
+              onClick={() => setResetSignal((value) => value + 1)}
+              aria-label="Reset 3D camera view"
+              title="Reset view"
+              className="p-2 text-[#1D1D1F] transition-colors hover:bg-black/[0.05] cursor-pointer"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Floating Apple Maps-style Glass Inspector (Desktop overlay) */}
+        {hasInspectorOpen ? (
+          <aside
+            aria-label="Selected record details"
+            className="ct-glass ct-fade-up ct-scroll absolute top-3 right-3 bottom-3 z-30 hidden w-[344px] flex-col overflow-y-auto rounded-[22px] p-4 lg:flex"
+          >
+            {selectedLandmark ? (
+              <LandmarkInspector
+                landmark={selectedLandmark}
+                issuesMap={issuesMap}
+                onSelectFeature={handleSelect}
+                onClose={closeInspector}
+              />
+            ) : selected?.kind === "issue" ? (
+              <IssueInspector
+                issueId={selected.refId}
+                issues={issues}
+                issuesMap={issuesMap}
+                evidenceMap={evidenceMap}
+                onClose={closeInspector}
+              />
+            ) : selected ? (
+              <ProjectInspector
+                projectId={selected.refId}
+                evidenceMap={evidenceMap}
+                onClose={closeInspector}
+              />
+            ) : null}
+          </aside>
+        ) : null}
+      </div>
+
+      {/* Mobile / tablet inspector card below the map when a record is selected */}
+      {hasInspectorOpen ? (
+        <div className="ct-surface ct-fade-up rounded-[22px] p-4 lg:hidden">
           {selectedLandmark ? (
             <LandmarkInspector
               landmark={selectedLandmark}
               issuesMap={issuesMap}
               onSelectFeature={handleSelect}
+              onClose={closeInspector}
             />
-          ) : !selected ? (
-            <Panel className="flex h-full flex-col gap-3 p-4">
-              <PanelHeader
-                title="Record & Landmark Inspector"
-                description="Select any beacon, road corridor, or glowing civic landmark in the 3D scene."
-                icon={<MapPin className="h-3.5 w-3.5" />}
-              />
-              <EmptyState
-                icon={<Building2 className="h-6 w-6" />}
-                title={
-                  visibleFeatures.length === 0
-                    ? "No records match these filters"
-                    : "No record or landmark selected"
-                }
-                description={
-                  visibleFeatures.length === 0
-                    ? "Nothing in the current filter and sector selection is on the map. Widen the filter or choose a different sector."
-                    : "Click any glowing beacon (red issues, amber delays, green active/completed), clickable road corridor, or cyan-ringed Dhaka landmark building."
-                }
-                action={
-                  <Link
-                    href="/civic-issues"
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-400/50 bg-cyan-500/15 px-3 py-1.5 font-mono text-[11px] font-semibold text-cyan-200 hover:bg-cyan-500/25"
-                  >
-                    Browse the register <ArrowRight className="h-3 w-3" />
-                  </Link>
-                }
-              />
-
-              <div className="rounded-lg border border-slate-800 bg-[#08101d] p-3">
-                <p className="flex items-center gap-1.5 font-mono text-[10px] font-semibold tracking-wider text-cyan-300 uppercase">
-                  <Layers className="h-3 w-3" /> Clickable 3D Landmarks ({CIVIC_LANDMARKS.length})
-                </p>
-                <div className="mt-2 grid grid-cols-1 gap-1.5">
-                  {CIVIC_LANDMARKS.slice(0, 4).map((lm) => (
-                    <button
-                      key={lm.id}
-                      type="button"
-                      onClick={() => handleSelectLandmark(lm.id)}
-                      className="flex items-center justify-between gap-2 rounded-md border border-slate-800/80 bg-[#060d18] px-2.5 py-1.5 text-left transition-colors hover:border-cyan-500/40 hover:bg-[#0c182b] cursor-pointer"
-                    >
-                      <span className="min-w-0">
-                        <span className="block truncate text-[11px] font-semibold text-slate-200">
-                          {lm.name}
-                        </span>
-                        <span className="block font-mono text-[9px] text-slate-500">
-                          {lm.kind} · {lm.sectorId}
-                        </span>
-                      </span>
-                      <ArrowRight className="h-3 w-3 shrink-0 text-cyan-400" />
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <p className="mt-auto font-mono text-[10px] leading-relaxed text-slate-500">
-                This is a stylised representation of a fictional Dhaka urban district.
-                Positions and building blocks are illustrative demonstration models.
-              </p>
-            </Panel>
-          ) : selected.kind === "issue" ? (
+          ) : selected?.kind === "issue" ? (
             <IssueInspector
               issueId={selected.refId}
               issues={issues}
               issuesMap={issuesMap}
               evidenceMap={evidenceMap}
+              onClose={closeInspector}
             />
-          ) : (
+          ) : selected ? (
             <ProjectInspector
               projectId={selected.refId}
               evidenceMap={evidenceMap}
+              onClose={closeInspector}
             />
-          )}
+          ) : null}
         </div>
-      </div>
+      ) : null}
     </div>
   );
 }
 
 /* ------------------------------------------------------------------ */
+/* Floating Glass Inspectors                                           */
+/* ------------------------------------------------------------------ */
+
+function CloseInspectorButton({ onClose }: { onClose: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClose}
+      aria-label="Close details panel"
+      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-black/[0.06] text-[#6E6E73] transition-colors hover:bg-black/[0.1] hover:text-[#1D1D1F] cursor-pointer"
+    >
+      <X className="h-3.5 w-3.5" />
+    </button>
+  );
+}
 
 function LandmarkInspector({
   landmark,
   issuesMap,
   onSelectFeature,
+  onClose,
 }: {
   landmark: CivicLandmark;
   issuesMap: Map<string, Issue>;
   onSelectFeature: (featureId: string) => void;
+  onClose: () => void;
 }) {
   const sector = getSector(landmark.sectorId);
   const linkedProjects = landmark.relatedProjectIds
@@ -511,23 +596,23 @@ function LandmarkInspector({
     .filter((i): i is Issue => i !== undefined);
 
   return (
-    <Panel
-      glow
-      className="ct-scroll flex h-full flex-col gap-3 p-4 xl:max-h-[calc(100vh-290px)] xl:overflow-y-auto"
-    >
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="rounded border border-cyan-500/35 bg-cyan-500/10 px-2 py-0.5 font-mono text-[10px] font-semibold text-cyan-300">
-          {landmark.code} · LANDMARK
-        </span>
-        <Badge tone="info" dot>
-          {landmark.floors} floors
-        </Badge>
+    <div className="flex flex-1 flex-col gap-3.5">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="rounded-full bg-[#007AFF]/[0.1] px-2.5 py-0.5 text-[11.5px] font-semibold text-[#0055CC] tabular-nums">
+            {landmark.code}
+          </span>
+          <Badge tone="neutral">{landmark.floors} floors</Badge>
+        </div>
+        <CloseInspectorButton onClose={onClose} />
       </div>
 
       <div>
-        <h2 className="text-sm font-bold leading-snug text-slate-50">{landmark.name}</h2>
-        <p className="mt-1 flex items-start gap-1.5 text-[11px] text-slate-300">
-          <Building2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-cyan-400" />
+        <h2 className="text-[17px] font-semibold tracking-[-0.02em] leading-snug text-[#1D1D1F]">
+          {landmark.name}
+        </h2>
+        <p className="mt-1 flex items-start gap-1.5 text-[12.5px] text-[#6E6E73]">
+          <Building2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#007AFF]" />
           <span>
             {landmark.kind}
             {sector ? ` · ${sector.name} (${sector.ward})` : ""}
@@ -535,48 +620,50 @@ function LandmarkInspector({
         </p>
       </div>
 
-      <p className="text-[11px] leading-relaxed text-slate-300">{landmark.summary}</p>
+      <p className="text-[13px] leading-relaxed text-[#48484A]">{landmark.summary}</p>
 
       {linkedProjects.length > 0 ? (
-        <div className="space-y-1.5">
-          <p className="flex items-center gap-1.5 font-mono text-[10px] tracking-wider text-slate-400 uppercase">
-            <Wrench className="h-3 w-3" /> Linked public works ({linkedProjects.length})
+        <div className="space-y-2">
+          <p className="flex items-center gap-1.5 text-[12px] font-semibold text-[#1D1D1F]">
+            <Wrench className="h-3.5 w-3.5 text-[#6E6E73]" /> Linked public works ({linkedProjects.length})
           </p>
           {linkedProjects.map((project) => (
             <div
               key={project.id}
-              className="rounded-lg border border-slate-800 bg-[#08101d] p-2.5"
+              className="rounded-[14px] border border-black/[0.06] bg-white/85 p-3"
             >
               <div className="flex items-center justify-between gap-2">
-                <span className="font-mono text-[10px] font-semibold text-cyan-300">
+                <span className="text-[11.5px] font-semibold text-[#0055CC] tabular-nums">
                   {project.code}
                 </span>
                 <Badge tone={projectStatusTone(project.status)} dot>
                   {PROJECT_STATUS_LABELS[project.status]}
                 </Badge>
               </div>
-              <p className="mt-0.5 text-[11px] font-semibold text-slate-100">{project.name}</p>
-              <div className="mt-2 flex flex-wrap items-center gap-2 font-mono text-[10px]">
+              <p className="mt-1 text-[13px] font-semibold leading-snug text-[#1D1D1F]">
+                {project.name}
+              </p>
+              <div className="mt-2.5 flex flex-wrap items-center gap-2 text-[12px] font-medium">
                 <button
                   type="button"
                   onClick={() => onSelectFeature(`project:${project.id}`)}
-                  className="text-cyan-300 hover:text-cyan-200 cursor-pointer"
+                  className="text-[#007AFF] hover:underline cursor-pointer"
                 >
                   Focus beacon
                 </button>
-                <span className="text-slate-600">·</span>
+                <span className="text-black/20">·</span>
                 <Link
                   href={`/public-projects/${project.id}`}
-                  className="text-slate-300 hover:text-cyan-200"
+                  className="text-[#1D1D1F] hover:text-[#007AFF]"
                 >
-                  Open ledger
+                  Ledger
                 </Link>
-                <span className="text-slate-600">·</span>
+                <span className="text-black/20">·</span>
                 <Link
                   href={`/ai-investigation?project=${project.id}`}
-                  className="inline-flex items-center gap-1 text-cyan-300 hover:text-cyan-100"
+                  className="inline-flex items-center gap-1 text-[#007AFF] hover:underline"
                 >
-                  <Sparkles className="h-2.5 w-2.5" /> Investigate
+                  <Sparkles className="h-3 w-3" /> Investigate
                 </Link>
               </div>
             </div>
@@ -585,22 +672,22 @@ function LandmarkInspector({
       ) : null}
 
       {linkedIssues.length > 0 ? (
-        <div className="space-y-1.5">
-          <p className="flex items-center gap-1.5 font-mono text-[10px] tracking-wider text-slate-400 uppercase">
-            <ShieldAlert className="h-3 w-3" /> Nearby civic issues ({linkedIssues.length})
+        <div className="space-y-2">
+          <p className="flex items-center gap-1.5 text-[12px] font-semibold text-[#1D1D1F]">
+            <ShieldAlert className="h-3.5 w-3.5 text-[#6E6E73]" /> Nearby civic issues ({linkedIssues.length})
           </p>
           <ul className="space-y-1.5">
             {linkedIssues.map((issue) => (
               <li key={issue.id}>
                 <Link
                   href={`/civic-issues/${issue.id}`}
-                  className="flex items-center justify-between gap-2 rounded-lg border border-slate-800 bg-[#08101d] px-2.5 py-2 transition-colors hover:border-cyan-500/40 hover:bg-[#0c182b]"
+                  className="flex items-center justify-between gap-2 rounded-[14px] border border-black/[0.06] bg-white/85 px-3 py-2.5 transition-colors hover:bg-white"
                 >
                   <span className="min-w-0">
-                    <span className="block font-mono text-[10px] text-cyan-300">
+                    <span className="block text-[11.5px] font-semibold text-[#0055CC] tabular-nums">
                       {issue.code}
                     </span>
-                    <span className="block truncate text-[11px] text-slate-200">
+                    <span className="block truncate text-[12.5px] font-medium text-[#1D1D1F]">
                       {issue.title}
                     </span>
                   </span>
@@ -613,7 +700,7 @@ function LandmarkInspector({
           </ul>
         </div>
       ) : null}
-    </Panel>
+    </div>
   );
 }
 
@@ -622,11 +709,13 @@ function IssueInspector({
   issues,
   issuesMap,
   evidenceMap,
+  onClose,
 }: {
   issueId: string;
   issues: Issue[];
   issuesMap: Map<string, Issue>;
   evidenceMap: Map<string, Evidence>;
+  onClose: () => void;
 }) {
   const issue = issuesMap.get(issueId);
   if (!issue) return null;
@@ -643,23 +732,28 @@ function IssueInspector({
   const tone = issueStatusTone(issue.status);
 
   return (
-    <Panel glow className="ct-scroll flex h-full flex-col gap-3 p-4 xl:max-h-[calc(100vh-290px)] xl:overflow-y-auto">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="rounded border border-cyan-500/35 bg-cyan-500/10 px-2 py-0.5 font-mono text-[10px] font-semibold text-cyan-300">
-          {issue.code}
-        </span>
-        <div className="flex items-center gap-1.5">
-          <Badge tone={severityTone(issue.severity)}>{issue.severity.toUpperCase()}</Badge>
+    <div className="flex flex-1 flex-col gap-3.5">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="rounded-full bg-[#007AFF]/[0.1] px-2.5 py-0.5 text-[11.5px] font-semibold text-[#0055CC] tabular-nums">
+            {issue.code}
+          </span>
           <Badge tone={tone} dot>
             {ISSUE_STATUS_LABELS[issue.status]}
           </Badge>
+          <Badge tone={severityTone(issue.severity)}>
+            {issue.severity.charAt(0).toUpperCase() + issue.severity.slice(1)}
+          </Badge>
         </div>
+        <CloseInspectorButton onClose={onClose} />
       </div>
 
       <div>
-        <h2 className="text-sm font-bold leading-snug text-slate-50">{issue.title}</h2>
-        <p className="mt-1 flex items-start gap-1.5 text-[11px] text-slate-300">
-          <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-cyan-400" />
+        <h2 className="text-[17px] font-semibold tracking-[-0.02em] leading-snug text-[#1D1D1F]">
+          {issue.title}
+        </h2>
+        <p className="mt-1 flex items-start gap-1.5 text-[12.5px] text-[#6E6E73]">
+          <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#007AFF]" />
           <span>
             {issue.location}
             {sector ? ` · ${sector.name}` : ""}
@@ -668,48 +762,48 @@ function IssueInspector({
       </div>
 
       <div className="grid grid-cols-2 gap-2">
-        <div className="rounded-lg border border-slate-800 bg-[#08101d] px-2.5 py-2">
-          <p className="font-mono text-[9px] tracking-wider text-slate-400 uppercase">Reported</p>
-          <p className="mt-0.5 font-mono text-[11px] font-semibold text-slate-100">
+        <div className="rounded-[12px] bg-black/[0.04] px-3 py-2">
+          <p className="text-[11px] text-[#6E6E73]">Reported</p>
+          <p className="mt-0.5 text-[12.5px] font-semibold text-[#1D1D1F] tabular-nums">
             {formatDate(issue.reportedAt)}
           </p>
         </div>
-        <div className="rounded-lg border border-slate-800 bg-[#08101d] px-2.5 py-2">
-          <p className="font-mono text-[9px] tracking-wider text-slate-400 uppercase">Category</p>
-          <p className="mt-0.5 font-mono text-[11px] font-semibold text-slate-100">
+        <div className="rounded-[12px] bg-black/[0.04] px-3 py-2">
+          <p className="text-[11px] text-[#6E6E73]">Category</p>
+          <p className="mt-0.5 text-[12.5px] font-semibold text-[#1D1D1F]">
             {CATEGORY_LABELS[issue.category]}
           </p>
         </div>
-        <div className="rounded-lg border border-slate-800 bg-[#08101d] px-2.5 py-2">
-          <p className="font-mono text-[9px] tracking-wider text-slate-400 uppercase">Citizen reports</p>
-          <p className="mt-0.5 font-mono text-[11px] font-semibold text-slate-100">
+        <div className="rounded-[12px] bg-black/[0.04] px-3 py-2">
+          <p className="text-[11px] text-[#6E6E73]">Citizen reports</p>
+          <p className="mt-0.5 text-[12.5px] font-semibold text-[#1D1D1F] tabular-nums">
             {issue.reportCount}
           </p>
         </div>
-        <div className="rounded-lg border border-slate-800 bg-[#08101d] px-2.5 py-2">
-          <p className="font-mono text-[9px] tracking-wider text-slate-400 uppercase">Last update</p>
-          <p className="mt-0.5 font-mono text-[11px] font-semibold text-slate-100">
+        <div className="rounded-[12px] bg-black/[0.04] px-3 py-2">
+          <p className="text-[11px] text-[#6E6E73]">Updated</p>
+          <p className="mt-0.5 text-[12.5px] font-semibold text-[#1D1D1F] tabular-nums">
             {formatDate(issue.updatedAt)}
           </p>
         </div>
       </div>
 
-      <p className="text-[11px] leading-relaxed text-slate-300">{issue.description}</p>
+      <p className="text-[13px] leading-relaxed text-[#48484A]">{issue.description}</p>
 
       {others.length > 0 ? (
-        <div className="rounded-lg border border-amber-500/30 bg-amber-950/20 p-2.5">
-          <p className="flex items-center gap-1.5 font-mono text-[10px] font-semibold tracking-wider text-amber-300 uppercase">
-            <ShieldAlert className="h-3 w-3" /> Recurring at this location
+        <div className="rounded-[14px] border border-[#FF9500]/25 bg-[#FF9500]/[0.08] p-3">
+          <p className="flex items-center gap-1.5 text-[12px] font-semibold text-[#B25000]">
+            <ShieldAlert className="h-3.5 w-3.5" /> Recurring at this location
           </p>
-          <p className="mt-1 text-[11px] leading-relaxed text-amber-100/90">
+          <p className="mt-1 text-[12px] leading-relaxed text-[#48484A]">
             {atLocation.length} separate reports exist for this physical site.
           </p>
           <ul className="mt-1.5 space-y-1">
             {others.map((item) => (
-              <li key={item.id} className="flex items-center gap-1.5 font-mono text-[10px]">
+              <li key={item.id} className="flex items-center gap-2 text-[11.5px] tabular-nums">
                 <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${TONES[issueStatusTone(item.status)].dot}`} />
-                <span className="text-cyan-300">{item.code}</span>
-                <span className="truncate text-slate-400">{formatDate(item.reportedAt)}</span>
+                <span className="font-semibold text-[#0055CC]">{item.code}</span>
+                <span className="truncate text-[#6E6E73]">{formatDate(item.reportedAt)}</span>
               </li>
             ))}
           </ul>
@@ -719,51 +813,55 @@ function IssueInspector({
       {project ? (
         <Link
           href={`/public-projects/${project.id}`}
-          className="rounded-lg border border-slate-800 bg-[#08101d] p-2.5 transition-colors hover:border-cyan-500/40 hover:bg-[#0c182b]"
+          className="rounded-[14px] border border-black/[0.06] bg-white/85 p-3 transition-colors hover:bg-white"
         >
-          <p className="flex items-center gap-1.5 font-mono text-[10px] tracking-wider text-slate-400 uppercase">
+          <p className="flex items-center gap-1.5 text-[11.5px] font-medium text-[#6E6E73]">
             <Wrench className="h-3 w-3" /> Related project
           </p>
-          <p className="mt-0.5 font-mono text-[10px] text-cyan-300">{project.code}</p>
-          <p className="truncate text-[11px] font-semibold text-slate-100">{project.name}</p>
+          <p className="mt-0.5 text-[12px] font-semibold text-[#0055CC] tabular-nums">
+            {project.code}
+          </p>
+          <p className="truncate text-[13px] font-semibold text-[#1D1D1F]">{project.name}</p>
         </Link>
       ) : null}
 
       <div>
-        <p className="flex items-center gap-1.5 font-mono text-[10px] tracking-wider text-slate-400 uppercase">
-          <FileText className="h-3 w-3" /> Evidence ({evidence.length})
+        <p className="flex items-center gap-1.5 text-[12px] font-semibold text-[#1D1D1F]">
+          <FileText className="h-3.5 w-3.5 text-[#6E6E73]" /> Evidence ({evidence.length})
         </p>
-        <div className="mt-1.5">
+        <div className="mt-2">
           <EvidenceGallery items={evidence} compact />
         </div>
       </div>
 
-      <div className="mt-auto flex flex-col gap-2">
+      <div className="mt-auto flex flex-col gap-2 pt-1">
         <Link
           href={`/civic-issues/${issue.id}`}
-          className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-cyan-400/50 bg-cyan-500/15 px-3 py-2 font-mono text-[11px] font-semibold text-cyan-200 transition-colors hover:bg-cyan-500/25"
+          className="inline-flex items-center justify-center gap-1.5 rounded-full border border-black/[0.08] bg-white px-4 py-2 text-[13px] font-medium text-[#1D1D1F] transition-colors hover:bg-black/[0.04]"
         >
-          Open full issue history <ArrowRight className="h-3 w-3" />
+          Open issue history <ArrowRight className="h-3.5 w-3.5" />
         </Link>
         {project ? (
           <Link
             href={`/ai-investigation?project=${project.id}`}
-            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-cyan-300/50 bg-gradient-to-r from-cyan-500 to-sky-500 px-3 py-2 font-mono text-[11px] font-bold text-slate-950 transition-all hover:brightness-110"
+            className="inline-flex items-center justify-center gap-1.5 rounded-full bg-[#007AFF] px-4 py-2 text-[13px] font-semibold text-white shadow-sm transition-all hover:bg-[#0066D6] active:scale-[0.98]"
           >
-            <Sparkles className="h-3 w-3" /> Investigate with AI
+            <Sparkles className="h-3.5 w-3.5" /> Investigate with AI
           </Link>
         ) : null}
       </div>
-    </Panel>
+    </div>
   );
 }
 
 function ProjectInspector({
   projectId,
   evidenceMap,
+  onClose,
 }: {
   projectId: string;
   evidenceMap: Map<string, Evidence>;
+  onClose: () => void;
 }) {
   const project = getProject(projectId);
   if (!project) return null;
@@ -781,115 +879,115 @@ function ProjectInspector({
   const missedMilestones = project.milestones.filter((m) => m.status === "missed").length;
 
   return (
-    <Panel glow className="ct-scroll flex h-full flex-col gap-3 p-4 xl:max-h-[calc(100vh-290px)] xl:overflow-y-auto">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="rounded border border-cyan-500/35 bg-cyan-500/10 px-2 py-0.5 font-mono text-[10px] font-semibold text-cyan-300">
-          {project.code}
-        </span>
-        <div className="flex items-center gap-1.5">
-          <Badge tone={severityTone(project.severity)}>{project.severity.toUpperCase()}</Badge>
+    <div className="flex flex-1 flex-col gap-3.5">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="rounded-full bg-[#007AFF]/[0.1] px-2.5 py-0.5 text-[11.5px] font-semibold text-[#0055CC] tabular-nums">
+            {project.code}
+          </span>
           <Badge tone={tone} dot>
             {PROJECT_STATUS_LABELS[project.status]}
           </Badge>
         </div>
+        <CloseInspectorButton onClose={onClose} />
       </div>
 
       <div>
-        <h2 className="text-sm font-bold leading-snug text-slate-50">{project.name}</h2>
-        <p className="mt-1 flex items-start gap-1.5 text-[11px] text-slate-300">
-          <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-cyan-400" />
+        <h2 className="text-[17px] font-semibold tracking-[-0.02em] leading-snug text-[#1D1D1F]">
+          {project.name}
+        </h2>
+        <p className="mt-1 flex items-start gap-1.5 text-[12.5px] text-[#6E6E73]">
+          <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#007AFF]" />
           <span>
             {project.location}
             {sector ? ` · ${sector.name}` : ""}
           </span>
         </p>
-        <p className="mt-1 font-mono text-[10px] text-slate-400">{project.authority}</p>
+        <p className="mt-1 text-[12px] text-[#6E6E73]">{project.authority}</p>
       </div>
 
-      <div className="rounded-lg border border-slate-800 bg-[#07101d] p-2.5">
+      <div className="rounded-[14px] bg-black/[0.04] p-3">
         <div className="flex items-baseline justify-between">
-          <p className="font-mono text-[9px] tracking-wider text-slate-400 uppercase">
-            Reported spend
-          </p>
-          <p className="font-mono text-[11px] font-semibold text-cyan-200">{spend}</p>
+          <p className="text-[12px] font-medium text-[#6E6E73]">Reported spend</p>
+          <p className="text-[13px] font-semibold text-[#0055CC] tabular-nums">{spend}</p>
         </div>
-        <SpendBar
-          allocated={project.allocatedBudgetBdt}
-          reported={project.reportedExpenditureBdt}
-          verified={project.verifiedExpenditureBdt}
-        />
-        <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2 font-mono text-[10px]">
-          <span className="text-slate-300">
+        <div className="mt-1.5">
+          <SpendBar
+            allocated={project.allocatedBudgetBdt}
+            reported={project.reportedExpenditureBdt}
+            verified={project.verifiedExpenditureBdt}
+          />
+        </div>
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11.5px] tabular-nums">
+          <span className="text-[#48484A]">
             {formatBdtCompact(project.reportedExpenditureBdt)} of{" "}
             {formatBdtCompact(project.allocatedBudgetBdt)}
           </span>
           <span className={project.verifiedExpenditureBdt === undefined ? TONES.warn.label : TONES.ok.label}>
             {project.verifiedExpenditureBdt === undefined
-              ? "No verified spend on file"
+              ? "No verified spend"
               : `${formatBdtCompact(project.verifiedExpenditureBdt)} verified`}
           </span>
         </div>
       </div>
 
       <div>
-        <div className="flex items-center justify-between font-mono text-[10px] text-slate-400">
+        <div className="flex items-center justify-between text-[12px] text-[#6E6E73]">
           <span>Verified physical progress</span>
-          <span className="font-semibold text-slate-200">
+          <span className="font-semibold text-[#1D1D1F] tabular-nums">
             {project.verifiedProgressPercent}%
           </span>
         </div>
         <ProgressBar
           value={project.verifiedProgressPercent}
           tone={tone}
-          className="mt-1"
+          className="mt-1.5"
           label={`${project.verifiedProgressPercent} percent verified progress`}
         />
       </div>
 
       <div className="grid grid-cols-2 gap-2">
-        <div className="rounded-lg border border-slate-800 bg-[#08101d] px-2.5 py-2">
-          <p className="flex items-center gap-1 font-mono text-[9px] tracking-wider text-slate-400 uppercase">
-            <CalendarClock className="h-2.5 w-2.5" /> Planned
+        <div className="rounded-[12px] bg-black/[0.04] px-3 py-2">
+          <p className="flex items-center gap-1 text-[11px] text-[#6E6E73]">
+            <CalendarClock className="h-3 w-3" /> Planned
           </p>
-          <p className="mt-0.5 font-mono text-[11px] font-semibold text-slate-100">
+          <p className="mt-0.5 text-[12.5px] font-semibold text-[#1D1D1F] tabular-nums">
             {formatDate(project.plannedCompletionDate)}
           </p>
         </div>
-        <div className="rounded-lg border border-slate-800 bg-[#08101d] px-2.5 py-2">
-          <p className="font-mono text-[9px] tracking-wider text-slate-400 uppercase">
-            Milestones
-          </p>
-          <p className="mt-0.5 font-mono text-[11px] font-semibold text-slate-100">
+        <div className="rounded-[12px] bg-black/[0.04] px-3 py-2">
+          <p className="text-[11px] text-[#6E6E73]">Milestones</p>
+          <p className="mt-0.5 text-[12.5px] font-semibold text-[#1D1D1F] tabular-nums">
             {metMilestones} met · {missedMilestones} missed
           </p>
         </div>
       </div>
 
-      <p className="text-[11px] leading-relaxed text-slate-300">{project.description}</p>
+      <p className="text-[13px] leading-relaxed text-[#48484A]">{project.description}</p>
 
       <div>
-        <p className="flex items-center gap-1.5 font-mono text-[10px] tracking-wider text-slate-400 uppercase">
-          <FileText className="h-3 w-3" /> Evidence ({evidence.length})
+        <p className="flex items-center gap-1.5 text-[12px] font-semibold text-[#1D1D1F]">
+          <FileText className="h-3.5 w-3.5 text-[#6E6E73]" /> Evidence ({evidence.length})
         </p>
-        <div className="mt-1.5">
+        <div className="mt-2">
           <EvidenceGallery items={evidence} compact />
         </div>
       </div>
 
-      <div className="mt-auto flex flex-col gap-2">
+      <div className="mt-auto flex flex-col gap-2 pt-1">
         <Link
           href={`/public-projects/${project.id}`}
-          className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-cyan-400/50 bg-cyan-500/15 px-3 py-2 font-mono text-[11px] font-semibold text-cyan-200 transition-colors hover:bg-cyan-500/25"
+          className="inline-flex items-center justify-center gap-1.5 rounded-full border border-black/[0.08] bg-white px-4 py-2 text-[13px] font-medium text-[#1D1D1F] transition-colors hover:bg-black/[0.04]"
         >
-          Open project ledger <ArrowRight className="h-3 w-3" />
+          Open project ledger <ArrowRight className="h-3.5 w-3.5" />
         </Link>
         <Link
           href={`/ai-investigation?project=${project.id}`}
-          className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-cyan-300/50 bg-gradient-to-r from-cyan-500 to-sky-500 px-3 py-2 font-mono text-[11px] font-bold text-slate-950 transition-all hover:brightness-110"
+          className="inline-flex items-center justify-center gap-1.5 rounded-full bg-[#007AFF] px-4 py-2 text-[13px] font-semibold text-white shadow-sm transition-all hover:bg-[#0066D6] active:scale-[0.98]"
         >
-          <Sparkles className="h-3 w-3" /> Investigate with AI
+          <Sparkles className="h-3.5 w-3.5" /> Investigate with AI
         </Link>
       </div>
-    </Panel>
+    </div>
   );
 }

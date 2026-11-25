@@ -8,8 +8,7 @@ import { ISSUE_STATUS_LABELS } from "@/types/citytrace";
 import { TONES, formatDate, issueStatusTone } from "@/utils/formatters";
 
 /**
- * Notification indicator backed by the live issue history — every entry is an
- * actual status event from the dataset (including citizen reports), not a fabricated alert.
+ * Floating glass notification menu backed by live issue history.
  */
 export default function NotificationsMenu({ events }: { events: ActivityEvent[] }) {
   const [open, setOpen] = useState(false);
@@ -39,15 +38,15 @@ export default function NotificationsMenu({ events }: { events: ActivityEvent[] 
         aria-expanded={open}
         aria-haspopup="dialog"
         aria-label={`Notifications: ${events.length} recent civic updates`}
-        className={`relative inline-flex h-8 w-8 items-center justify-center rounded-lg border transition-colors cursor-pointer ${
+        className={`relative inline-flex h-9 w-9 items-center justify-center rounded-full border transition-all cursor-pointer ${
           open
-            ? "border-cyan-400/60 bg-cyan-500/15 text-cyan-200"
-            : "border-slate-700/80 bg-slate-900/70 text-slate-300 hover:border-cyan-500/40 hover:text-cyan-200"
+            ? "border-[#007AFF]/40 bg-white text-[#007AFF] shadow-sm"
+            : "border-black/[0.08] bg-white/85 text-[#1D1D1F] shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-white"
         }`}
       >
-        <Bell className="h-3.5 w-3.5" />
+        <Bell className="h-4 w-4" strokeWidth={1.75} />
         {events.length > 0 ? (
-          <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-cyan-500 px-1 font-mono text-[9px] font-bold text-slate-950">
+          <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#007AFF] px-1 text-[10px] font-semibold text-white tabular-nums">
             {events.length}
           </span>
         ) : null}
@@ -57,23 +56,23 @@ export default function NotificationsMenu({ events }: { events: ActivityEvent[] 
         <div
           role="dialog"
           aria-label="Recent civic updates"
-          className="ct-panel ct-fade-up absolute right-0 z-50 mt-2 w-[min(20rem,calc(100vw-2rem))] overflow-hidden rounded-xl"
+          className="ct-glass ct-fade-up absolute right-0 z-50 mt-2.5 w-[min(21rem,calc(100vw-2rem))] overflow-hidden rounded-[20px]"
         >
-          <div className="flex items-center justify-between border-b border-slate-800 px-3 py-2">
-            <p className="font-mono text-[10px] font-semibold tracking-[0.16em] text-cyan-300 uppercase">
-              Recent Civic Updates
+          <div className="flex items-center justify-between border-b border-black/[0.06] px-4 py-3">
+            <p className="text-[13px] font-semibold text-[#1D1D1F]">
+              Recent civic updates
             </p>
             <button
               type="button"
               onClick={() => setOpen(false)}
-              className="rounded p-1 text-slate-400 hover:bg-slate-800 hover:text-slate-200 cursor-pointer"
+              className="rounded-full p-1 text-[#6E6E73] transition-colors hover:bg-black/[0.06] hover:text-[#1D1D1F] cursor-pointer"
               aria-label="Close notifications"
             >
               <X className="h-3.5 w-3.5" />
             </button>
           </div>
 
-          <ul className="ct-scroll max-h-80 divide-y divide-slate-800/80 overflow-y-auto">
+          <ul className="ct-scroll max-h-80 divide-y divide-black/[0.05] overflow-y-auto">
             {events.map((event) => {
               const tone = issueStatusTone(event.status);
               return (
@@ -81,22 +80,22 @@ export default function NotificationsMenu({ events }: { events: ActivityEvent[] 
                   <Link
                     href={`/civic-issues/${event.issueId}`}
                     onClick={() => setOpen(false)}
-                    className="flex items-start gap-2.5 px-3 py-2.5 transition-colors hover:bg-slate-800/50"
+                    className="flex items-start gap-2.5 px-4 py-3 transition-colors hover:bg-black/[0.035]"
                   >
                     <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${TONES[tone].dot}`} />
                     <span className="min-w-0 flex-1">
-                      <span className="flex flex-wrap items-center gap-1.5">
-                        <span className="font-mono text-[10px] font-semibold text-cyan-300">
+                      <span className="flex flex-wrap items-center gap-2">
+                        <span className="text-[12px] font-semibold text-[#0055CC] tabular-nums">
                           {event.issueCode}
                         </span>
-                        <span className={`font-mono text-[9px] ${TONES[tone].label}`}>
+                        <span className={`text-[11.5px] font-medium ${TONES[tone].label}`}>
                           {ISSUE_STATUS_LABELS[event.status]}
                         </span>
                       </span>
-                      <span className="mt-0.5 block text-[11px] leading-snug text-slate-200">
+                      <span className="mt-0.5 block text-[12.5px] leading-snug text-[#1D1D1F]">
                         {event.note}
                       </span>
-                      <span className="mt-0.5 block font-mono text-[9px] text-slate-500">
+                      <span className="mt-1 block text-[11px] text-[#6E6E73] tabular-nums">
                         {formatDate(event.at)}
                       </span>
                     </span>
@@ -109,10 +108,10 @@ export default function NotificationsMenu({ events }: { events: ActivityEvent[] 
           <Link
             href="/civic-issues"
             onClick={() => setOpen(false)}
-            className="flex items-center justify-between border-t border-slate-800 px-3 py-2 font-mono text-[10px] text-cyan-300 hover:bg-slate-800/40"
+            className="flex items-center justify-between border-t border-black/[0.06] bg-black/[0.02] px-4 py-2.5 text-[12.5px] font-medium text-[#007AFF] hover:bg-black/[0.04]"
           >
             <span>Open civic issue register</span>
-            <ArrowRight className="h-3 w-3" />
+            <ArrowRight className="h-3.5 w-3.5" />
           </Link>
         </div>
       ) : null}
