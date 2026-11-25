@@ -5,119 +5,53 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
-import { Compass, Layers, MousePointerClick } from "lucide-react";
+import { Compass, Layers, MousePointerClick, Navigation } from "lucide-react";
 import type { MapFeature, MapPosition } from "@/types/citytrace";
 import { TONES, mapFeatureTone } from "@/utils/formatters";
+import {
+  CITY_MAPS,
+  CIVIC_LANDMARKS,
+  DHAKA_BUILDINGS,
+  type CityMapId,
+  type CityRenderMode,
+} from "./cityMapsData";
+import {
+  BridgesAndGreenery,
+  DetailedBuilding,
+  ElevatedMetroLine,
+  MapOverlayLayers,
+  SubsurfaceUtilities,
+  TrafficPulses,
+} from "./CityBuildings";
 
 /* ------------------------------------------------------------------ */
-/* Procedural district geometry                                        */
+/* Streetlight corridor & expanded 42x42 Dhaka road/canal network      */
 /* ------------------------------------------------------------------ */
 
-interface BuildingSpec {
-  id: string;
-  x: number;
-  z: number;
-  w: number;
-  h: number;
-  d: number;
-  tone: "primary" | "secondary" | "civic";
-  edgeGlow: boolean;
-}
-
-/** Low-poly Dhaka Sector 04 structures arranged around the arterial grid. */
-const DHAKA_BUILDINGS: BuildingSpec[] = [
-  { id: "b1", x: -4.2, z: -0.9, w: 1.4, h: 1.9, d: 1.3, tone: "secondary", edgeGlow: false },
-  { id: "b2", x: -4.1, z: -3.2, w: 1.5, h: 2.8, d: 1.4, tone: "primary", edgeGlow: true },
-  { id: "b3", x: -4.3, z: -5.6, w: 1.3, h: 1.5, d: 1.4, tone: "secondary", edgeGlow: false },
-  { id: "b4", x: -2.9, z: -1.1, w: 0.9, h: 1.3, d: 1.0, tone: "secondary", edgeGlow: false },
-  { id: "b5", x: -3.0, z: -4.8, w: 0.95, h: 2.1, d: 1.1, tone: "primary", edgeGlow: false },
-
-  { id: "b6", x: -8.6, z: -1.0, w: 1.5, h: 1.8, d: 1.6, tone: "secondary", edgeGlow: false },
-  { id: "b7", x: -8.7, z: -3.6, w: 1.4, h: 2.3, d: 1.5, tone: "primary", edgeGlow: true },
-  { id: "b8", x: -8.5, z: 3.6, w: 1.6, h: 1.4, d: 1.4, tone: "secondary", edgeGlow: false },
-  { id: "b9", x: -8.6, z: 6.0, w: 1.3, h: 1.9, d: 1.3, tone: "secondary", edgeGlow: false },
-
-  { id: "b10", x: 0.6, z: -1.2, w: 1.6, h: 3.4, d: 1.5, tone: "civic", edgeGlow: true },
-  { id: "b11", x: 2.8, z: -1.1, w: 1.4, h: 2.4, d: 1.3, tone: "primary", edgeGlow: false },
-  { id: "b12", x: 0.7, z: -3.7, w: 1.7, h: 4.1, d: 1.6, tone: "civic", edgeGlow: true },
-  { id: "b13", x: 3.0, z: -3.6, w: 1.5, h: 2.9, d: 1.4, tone: "primary", edgeGlow: true },
-  { id: "b14", x: 1.0, z: -6.1, w: 1.8, h: 2.2, d: 1.3, tone: "secondary", edgeGlow: false },
-  { id: "b15", x: 3.3, z: -6.0, w: 1.3, h: 1.7, d: 1.2, tone: "secondary", edgeGlow: false },
-
-  { id: "b16", x: 7.7, z: -1.2, w: 1.5, h: 2.1, d: 1.5, tone: "primary", edgeGlow: true },
-  { id: "b17", x: 7.8, z: -3.7, w: 1.6, h: 1.6, d: 1.7, tone: "civic", edgeGlow: false },
-  { id: "b18", x: 7.6, z: -6.1, w: 1.4, h: 2.6, d: 1.3, tone: "secondary", edgeGlow: false },
-
-  { id: "b19", x: -4.1, z: 3.5, w: 1.5, h: 2.0, d: 1.3, tone: "primary", edgeGlow: false },
-  { id: "b20", x: -4.2, z: 5.9, w: 1.6, h: 2.7, d: 1.4, tone: "primary", edgeGlow: true },
-  { id: "b21", x: -2.9, z: 4.7, w: 0.9, h: 1.5, d: 1.2, tone: "secondary", edgeGlow: false },
-
-  { id: "b22", x: 0.7, z: 3.5, w: 1.5, h: 2.6, d: 1.4, tone: "primary", edgeGlow: true },
-  { id: "b23", x: 3.0, z: 3.6, w: 1.6, h: 1.8, d: 1.5, tone: "secondary", edgeGlow: false },
-  { id: "b24", x: 0.9, z: 5.9, w: 1.7, h: 3.1, d: 1.4, tone: "civic", edgeGlow: true },
-  { id: "b25", x: 3.2, z: 6.1, w: 1.4, h: 1.6, d: 1.3, tone: "secondary", edgeGlow: false },
-
-  { id: "b26", x: 7.7, z: 3.7, w: 1.5, h: 2.2, d: 1.6, tone: "primary", edgeGlow: false },
-];
-
-const DEFAULT_CAMERA_POS = new THREE.Vector3(12.6, 10.6, 14.2);
-const DEFAULT_TARGET = new THREE.Vector3(0, 0.35, 0);
-
-function LowPolyBuilding({ b }: { b: BuildingSpec }) {
-  const edgesGeo = useMemo(() => {
-    const box = new THREE.BoxGeometry(b.w, b.h, b.d);
-    const edges = new THREE.EdgesGeometry(box);
-    box.dispose();
-    return edges;
-  }, [b.w, b.h, b.d]);
-
-  useEffect(() => () => edgesGeo.dispose(), [edgesGeo]);
-
-  const fillColor =
-    b.tone === "civic" ? "#132944" : b.tone === "primary" ? "#0e2038" : "#0a1729";
-  const roofColor = b.edgeGlow ? "#173c5e" : "#11243c";
-
-  return (
-    <group position={[b.x, b.h / 2, b.z]}>
-      <mesh>
-        <boxGeometry args={[b.w, b.h, b.d]} />
-        <meshStandardMaterial color={fillColor} roughness={0.78} metalness={0.22} />
-      </mesh>
-
-      <mesh position={[0, b.h / 2 + 0.04, 0]}>
-        <boxGeometry args={[b.w * 0.86, 0.08, b.d * 0.86]} />
-        <meshStandardMaterial
-          color={roofColor}
-          emissive={b.edgeGlow ? "#083344" : "#000000"}
-          emissiveIntensity={b.edgeGlow ? 0.65 : 0}
-          roughness={0.6}
-        />
-      </mesh>
-
-      <lineSegments geometry={edgesGeo}>
-        <lineBasicMaterial
-          color={b.edgeGlow ? "#22d3ee" : "#1e3a5f"}
-          transparent
-          opacity={b.edgeGlow ? 0.5 : 0.32}
-        />
-      </lineSegments>
-    </group>
-  );
-}
-
-function StreetlightCorridor() {
-  const lampZPositions = [-5.2, -3.5, -1.8, -0.1, 2.8, 4.8];
+function StreetlightCorridor({ renderMode }: { renderMode: CityRenderMode }) {
+  const lampZPositions = [-7.0, -5.2, -3.5, -1.8, -0.1, 2.8, 4.8, 6.8];
+  const dimmed = renderMode === "xray";
   return (
     <group>
       {lampZPositions.map((z, idx) => (
         <group key={`lamp-${idx}`} position={[6.18, 0, z]}>
           <mesh position={[0, 0.62, 0]}>
             <cylinderGeometry args={[0.03, 0.04, 1.24, 6]} />
-            <meshStandardMaterial color="#1e293b" metalness={0.5} roughness={0.4} />
+            <meshStandardMaterial
+              color="#1e293b"
+              metalness={0.5}
+              roughness={0.4}
+              transparent={dimmed}
+              opacity={dimmed ? 0.3 : 1}
+            />
           </mesh>
           <mesh position={[-0.14, 1.24, 0]}>
             <boxGeometry args={[0.28, 0.05, 0.07]} />
-            <meshStandardMaterial color="#34d399" emissive="#10b981" emissiveIntensity={1.6} />
+            <meshStandardMaterial
+              color="#34d399"
+              emissive="#10b981"
+              emissiveIntensity={dimmed ? 0.5 : 1.6}
+            />
           </mesh>
         </group>
       ))}
@@ -159,22 +93,37 @@ const CLICKABLE_CORRIDORS: CorridorDef[] = [
     label: "East Civic Boulevard Smart LED (Verified) — click to inspect",
     preferredFeatureIds: ["project:P-L03"],
     position: [5.8, 0.018, 0.0],
-    size: [1.65, 9.6],
+    size: [1.65, 11.2],
     color: "#10b981",
     hoverColor: "#34d399",
   },
+  {
+    id: "civic-core-intersection",
+    label: "Civic Core Main Intersection (Stalled) — click to inspect",
+    preferredFeatureIds: ["project:P-R10", "issue:ISS-009"],
+    position: [0.8, 0.018, -0.4],
+    size: [2.4, 2.2],
+    color: "#ef4444",
+    hoverColor: "#f87171",
+  },
 ];
 
-function DhakaRoadsAndCanal({
+function DhakaDistrictRoads({
+  mapId,
+  renderMode,
   onSelectCorridor,
   onHoverCorridor,
 }: {
+  mapId: CityMapId;
+  renderMode: CityRenderMode;
   onSelectCorridor: (preferredFeatureIds: string[]) => void;
   onHoverCorridor: (label: string | null) => void;
 }) {
   const [hoveredCorridor, setHoveredCorridor] = useState<string | null>(null);
-  const dashPositionsX = [-9.5, -7.8, -4.4, -2.9, 0.1, 1.8, 3.6, 6.9, 8.8];
-  const dashPositionsZ = [-6.4, -4.6, -2.8, -1.0, 2.9, 4.7, 6.5];
+  const dashPositionsX = [
+    -13.6, -11.6, -9.5, -7.8, -4.4, -2.9, 0.1, 1.8, 3.6, 6.9, 8.8, 11.4, 13.4,
+  ];
+  const dashPositionsZ = [-11.5, -9.5, -7.8, -6.4, -4.6, -2.8, -1.0, 2.9, 4.7, 6.5, 8.5, 10.6];
 
   useEffect(() => {
     document.body.style.cursor = hoveredCorridor ? "pointer" : "auto";
@@ -183,26 +132,30 @@ function DhakaRoadsAndCanal({
     };
   }, [hoveredCorridor]);
 
+  const roadOpacity = renderMode === "xray" ? 0.42 : 1;
+  const roadColor = mapId === "arterial-engineering" ? "#0d1a2e" : "#0b1525";
+
   return (
     <group>
+      {/* Expanded ground plane */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.04, 0]}>
-        <planeGeometry args={[28, 28]} />
+        <planeGeometry args={[42, 42]} />
         <meshStandardMaterial color="#050b16" roughness={0.95} metalness={0.08} />
       </mesh>
 
-      <gridHelper args={[26, 26, "#0e4a63", "#0b1e33"]} position={[0, -0.025, 0]} />
+      <gridHelper args={[40, 40, "#0e4a63", "#0b1e33"]} position={[0, -0.025, 0]} />
 
-      {/* Main East-West Avenue */}
+      {/* Main East-West Avenue (z = 1.2) */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.005, 1.2]}>
-        <planeGeometry args={[22, 1.75]} />
-        <meshStandardMaterial color="#0b1525" roughness={0.85} />
+        <planeGeometry args={[32, 1.75]} />
+        <meshStandardMaterial color={roadColor} roughness={0.85} transparent opacity={roadOpacity} />
       </mesh>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 2.08]}>
-        <planeGeometry args={[22, 0.04]} />
+        <planeGeometry args={[32, 0.04]} />
         <meshBasicMaterial color="#0891b2" transparent opacity={0.45} />
       </mesh>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0.32]}>
-        <planeGeometry args={[22, 0.04]} />
+        <planeGeometry args={[32, 0.04]} />
         <meshBasicMaterial color="#0891b2" transparent opacity={0.45} />
       </mesh>
       {dashPositionsX.map((dx, i) => (
@@ -212,10 +165,26 @@ function DhakaRoadsAndCanal({
         </mesh>
       ))}
 
-      {/* North-South Main Arterial */}
+      {/* Secondary East-West Avenues: North Gate (z = 5.2) & South Market (z = -5.0) */}
+      {[5.2, -5.0].map((rz, idx) => (
+        <mesh key={`ew-sec-${idx}`} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.004, rz]}>
+          <planeGeometry args={[30, 1.2]} />
+          <meshStandardMaterial color="#091322" roughness={0.88} transparent opacity={roadOpacity} />
+        </mesh>
+      ))}
+
+      {/* Outer Ring Roads (z = 9.5 & z = -9.5) */}
+      {[9.5, -9.5].map((rz, idx) => (
+        <mesh key={`ew-ring-${idx}`} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.003, rz]}>
+          <planeGeometry args={[30, 1.05]} />
+          <meshStandardMaterial color="#08111e" roughness={0.9} transparent opacity={roadOpacity} />
+        </mesh>
+      ))}
+
+      {/* North-South Main Arterial (x = -1.5) */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[-1.5, 0.006, 0]}>
-        <planeGeometry args={[1.65, 17.5]} />
-        <meshStandardMaterial color="#0b1525" roughness={0.85} />
+        <planeGeometry args={[1.65, 28]} />
+        <meshStandardMaterial color={roadColor} roughness={0.85} transparent opacity={roadOpacity} />
       </mesh>
       {dashPositionsZ.map((dz, i) => (
         <mesh key={`dash-z-${i}`} rotation={[-Math.PI / 2, 0, 0]} position={[-1.5, 0.013, dz]}>
@@ -224,39 +193,43 @@ function DhakaRoadsAndCanal({
         </mesh>
       ))}
 
-      {/* East Civic Boulevard */}
+      {/* East Civic Boulevard (x = 5.4) */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[5.4, 0.006, 0]}>
-        <planeGeometry args={[1.35, 17.5]} />
-        <meshStandardMaterial color="#0b1525" roughness={0.85} />
+        <planeGeometry args={[1.35, 28]} />
+        <meshStandardMaterial color="#0b1525" roughness={0.85} transparent opacity={roadOpacity} />
       </mesh>
 
-      {/* Intersection pad */}
+      {/* Outer North-South Connectors (x = -10.6 & x = 10.6) */}
+      {[-10.6, 10.6].map((rx, idx) => (
+        <mesh key={`ns-outer-${idx}`} rotation={[-Math.PI / 2, 0, 0]} position={[rx, 0.004, 0]}>
+          <planeGeometry args={[1.15, 26]} />
+          <meshStandardMaterial color="#08111e" roughness={0.9} transparent opacity={roadOpacity} />
+        </mesh>
+      ))}
+
+      {/* Main Intersection pad */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[-1.5, 0.009, 1.2]}>
-        <planeGeometry args={[1.9, 1.9]} />
-        <meshStandardMaterial color="#101f36" roughness={0.8} />
+        <planeGeometry args={[2.0, 2.0]} />
+        <meshStandardMaterial color="#101f36" roughness={0.8} transparent opacity={roadOpacity} />
       </mesh>
 
-      {/* Western storm canal */}
+      {/* Western Storm Canal (x = -6.2) */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[-6.2, 0.002, 0]}>
-        <planeGeometry args={[1.55, 18]} />
+        <planeGeometry args={[1.6, 28]} />
         <meshStandardMaterial
           color="#06283d"
-          emissive="#083344"
-          emissiveIntensity={0.45}
+          emissive={mapId === "hydrology-basin" ? "#0284c7" : "#083344"}
+          emissiveIntensity={mapId === "hydrology-basin" ? 0.75 : 0.45}
           roughness={0.35}
         />
       </mesh>
-      <mesh position={[-7.02, 0.09, 0]}>
-        <boxGeometry args={[0.14, 0.18, 18]} />
+      <mesh position={[-7.04, 0.09, 0]}>
+        <boxGeometry args={[0.14, 0.18, 28]} />
         <meshStandardMaterial color="#162b45" />
       </mesh>
-      <mesh position={[-5.38, 0.09, 0]}>
-        <boxGeometry args={[0.14, 0.18, 18]} />
+      <mesh position={[-5.36, 0.09, 0]}>
+        <boxGeometry args={[0.14, 0.18, 28]} />
         <meshStandardMaterial color="#162b45" />
-      </mesh>
-      <mesh position={[-6.2, 0.08, 1.2]}>
-        <boxGeometry args={[1.95, 0.14, 1.85]} />
-        <meshStandardMaterial color="#15263f" />
       </mesh>
 
       {/* Interactive road & infrastructure corridors */}
@@ -285,7 +258,7 @@ function DhakaRoadsAndCanal({
             <meshBasicMaterial
               color={isHovered ? corridor.hoverColor : corridor.color}
               transparent
-              opacity={isHovered ? 0.34 : 0.14}
+              opacity={isHovered ? 0.36 : 0.14}
             />
           </mesh>
         );
@@ -389,8 +362,7 @@ function FeatureMarker({
   );
 }
 
-/* eslint-disable react-hooks/immutability -- this projector is the imperative R3F frame loop that writes label positions straight onto projected DOM nodes */
-/** Projects 3D anchors into screen space for crisp DOM labels. */
+/* eslint-disable react-hooks/immutability -- imperative R3F frame loop writing projected screen coords to DOM labels */
 function MarkerProjector({
   features,
   activeId,
@@ -441,43 +413,67 @@ function MarkerProjector({
 /* eslint-enable react-hooks/immutability */
 
 function CameraRig({
+  mapId,
   autoRotate,
   resetSignal,
   selectedFeature,
+  selectedLandmarkCoords,
   sectorFocus,
+  panGoal,
 }: {
+  mapId: CityMapId;
   autoRotate: boolean;
   resetSignal: number;
   selectedFeature: MapFeature | null;
+  selectedLandmarkCoords: MapPosition | null;
   sectorFocus: MapPosition | null;
+  panGoal: { point: MapPosition; seq: number } | null;
 }) {
   const controlsRef = useRef<OrbitControlsImpl | null>(null);
   const { camera } = useThree();
   const modeRef = useRef<"idle" | "reset" | "focus">("idle");
-  const targetGoalRef = useRef(new THREE.Vector3().copy(DEFAULT_TARGET));
-  const cameraGoalRef = useRef(new THREE.Vector3().copy(DEFAULT_CAMERA_POS));
+  const activeMap = useMemo(
+    () => CITY_MAPS.find((m) => m.id === mapId) ?? CITY_MAPS[0],
+    [mapId]
+  );
+  const targetGoalRef = useRef(new THREE.Vector3(...activeMap.cameraTarget));
+  const cameraGoalRef = useRef(new THREE.Vector3(...activeMap.cameraPos));
 
   useEffect(() => {
-    if (resetSignal > 0) {
-      targetGoalRef.current.copy(DEFAULT_TARGET);
-      cameraGoalRef.current.copy(DEFAULT_CAMERA_POS);
-      modeRef.current = "reset";
-    }
-  }, [resetSignal]);
+    targetGoalRef.current.set(...activeMap.cameraTarget);
+    cameraGoalRef.current.set(...activeMap.cameraPos);
+    modeRef.current = "reset";
+  }, [activeMap, resetSignal]);
 
   useEffect(() => {
     if (!sectorFocus) return;
     const [sx, sz] = sectorFocus;
-    targetGoalRef.current.set(sx * 0.6, 0.45, sz * 0.6);
-    cameraGoalRef.current.set(sx * 0.6 + 9.2, 8.8, sz * 0.6 + 10.4);
+    targetGoalRef.current.set(sx * 0.65, 0.45, sz * 0.65);
+    cameraGoalRef.current.set(sx * 0.65 + 9.2, 8.8, sz * 0.65 + 10.4);
     modeRef.current = "focus";
   }, [sectorFocus]);
 
   useEffect(() => {
+    if (!panGoal) return;
+    const [px, pz] = panGoal.point;
+    targetGoalRef.current.set(px, 0.4, pz);
+    cameraGoalRef.current.set(px + 8.5, 8.6, pz + 9.8);
+    modeRef.current = "focus";
+  }, [panGoal]);
+
+  useEffect(() => {
+    if (!selectedLandmarkCoords) return;
+    const [lx, lz] = selectedLandmarkCoords;
+    targetGoalRef.current.set(lx * 0.72, 0.7, lz * 0.72);
+    cameraGoalRef.current.set(lx * 0.72 + 7.6, 7.6, lz * 0.72 + 8.6);
+    modeRef.current = "focus";
+  }, [selectedLandmarkCoords]);
+
+  useEffect(() => {
     if (!selectedFeature) return;
     const [mx, mz] = selectedFeature.coordinates;
-    targetGoalRef.current.set(mx * 0.6, 0.45, mz * 0.6);
-    cameraGoalRef.current.set(mx * 0.6 + 8.4, 8.0, mz * 0.6 + 9.6);
+    targetGoalRef.current.set(mx * 0.65, 0.45, mz * 0.65);
+    cameraGoalRef.current.set(mx * 0.65 + 8.4, 8.0, mz * 0.65 + 9.6);
     modeRef.current = "focus";
   }, [selectedFeature]);
 
@@ -486,7 +482,6 @@ function CameraRig({
     if (!controls) return;
 
     if (modeRef.current === "idle") {
-      // Kept in sync here rather than read during render.
       controls.autoRotate = autoRotate;
       return;
     }
@@ -511,12 +506,12 @@ function CameraRig({
       makeDefault
       enableDamping
       dampingFactor={0.07}
-      minDistance={5.5}
-      maxDistance={26}
-      maxPolarAngle={Math.PI / 2.18}
-      minPolarAngle={0.22}
+      minDistance={5.0}
+      maxDistance={36}
+      maxPolarAngle={Math.PI / 2.15}
+      minPolarAngle={0.2}
       autoRotate={autoRotate}
-      autoRotateSpeed={0.42}
+      autoRotateSpeed={0.38}
       onStart={() => {
         modeRef.current = "idle";
       }}
@@ -525,31 +520,124 @@ function CameraRig({
 }
 
 /* ------------------------------------------------------------------ */
-/* Scene                                                               */
+/* Interactive 2D Radar Mini-Map HUD                                   */
 /* ------------------------------------------------------------------ */
 
-/**
- * The 26 buildings and 24 markers are memoised so that hovering a single
- * beacon — which updates the scene's hover state — does not re-render the
- * entire city. Buildings are effectively static; markers only re-render when
- * their own selection state changes.
- */
-const MemoBuilding = memo(LowPolyBuilding);
+function RadarMiniMap({
+  features,
+  selectedId,
+  selectedLandmarkId,
+  onPanTo,
+}: {
+  features: MapFeature[];
+  selectedId: string | null;
+  selectedLandmarkId: string | null;
+  onPanTo: (point: MapPosition) => void;
+}) {
+  const mapExtent = 18; // [-18, +18] mapped to 0..120 SVG viewBox
+
+  const toSvg = (v: number) => ((v + mapExtent) / (mapExtent * 2)) * 120;
+
+  return (
+    <div className="hidden sm:block">
+      <div className="rounded-lg border border-cyan-500/30 bg-[#050b14]/90 p-1.5 backdrop-blur-md">
+        <div className="mb-1 flex items-center justify-between gap-2 px-0.5 font-mono text-[8px] tracking-wider text-cyan-300 uppercase">
+          <span className="inline-flex items-center gap-1">
+            <Navigation className="h-2.5 w-2.5" /> Radar
+          </span>
+          <span className="text-slate-500">Click to pan</span>
+        </div>
+        <svg
+          viewBox="0 0 120 120"
+          className="h-[104px] w-[104px] cursor-crosshair rounded border border-slate-800 bg-[#040811]"
+          role="img"
+          aria-label="District radar mini-map. Click anywhere to pan the 3D camera."
+          onClick={(event) => {
+            const rect = event.currentTarget.getBoundingClientRect();
+            const nx = (event.clientX - rect.left) / rect.width;
+            const nz = (event.clientY - rect.top) / rect.height;
+            const wx = Number((nx * mapExtent * 2 - mapExtent).toFixed(2));
+            const wz = Number((nz * mapExtent * 2 - mapExtent).toFixed(2));
+            onPanTo([wx, wz]);
+          }}
+        >
+          {/* Canal */}
+          <rect x={toSvg(-6.2) - 2.5} y={10} width={5} height={100} fill="#083344" opacity={0.85} />
+          {/* Main avenues */}
+          <rect x={6} y={toSvg(1.2) - 2} width={108} height={4} fill="#162842" />
+          <rect x={6} y={toSvg(5.2) - 1.2} width={108} height={2.4} fill="#112036" />
+          <rect x={6} y={toSvg(-5.0) - 1.2} width={108} height={2.4} fill="#112036" />
+          <rect x={toSvg(-1.5) - 2} y={8} width={4} height={104} fill="#162842" />
+          <rect x={toSvg(5.4) - 1.5} y={8} width={3} height={104} fill="#112036" />
+
+          {/* Building footprints */}
+          {DHAKA_BUILDINGS.map((b) => (
+            <rect
+              key={`mini-${b.id}`}
+              x={toSvg(b.x - b.w / 2)}
+              y={toSvg(b.z - b.d / 2)}
+              width={Math.max(1.8, (b.w / (mapExtent * 2)) * 120)}
+              height={Math.max(1.8, (b.d / (mapExtent * 2)) * 120)}
+              fill={
+                b.landmarkId === selectedLandmarkId
+                  ? "#22d3ee"
+                  : b.landmarkId
+                    ? "#0891b2"
+                    : "#1e3a5f"
+              }
+              opacity={b.landmarkId ? 0.95 : 0.65}
+            />
+          ))}
+
+          {/* Live beacons */}
+          {features.map((f) => {
+            const hex = TONES[mapFeatureTone(f.state)].hex;
+            const active = f.id === selectedId;
+            return (
+              <circle
+                key={`mini-f-${f.id}`}
+                cx={toSvg(f.coordinates[0])}
+                cy={toSvg(f.coordinates[1])}
+                r={active ? 3.1 : 1.9}
+                fill={hex}
+                stroke={active ? "#ffffff" : "none"}
+                strokeWidth={0.8}
+              />
+            );
+          })}
+        </svg>
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Main Scene                                                          */
+/* ------------------------------------------------------------------ */
+
 const MemoFeatureMarker = memo(FeatureMarker);
 
 interface CitySceneProps {
+  mapId: CityMapId;
+  renderMode: CityRenderMode;
   features: MapFeature[];
   selectedId: string | null;
+  selectedLandmarkId: string | null;
   onSelect: (id: string | null) => void;
+  onSelectLandmark: (landmarkId: string | null) => void;
   autoRotate: boolean;
   resetSignal: number;
   sectorFocus?: MapPosition | null;
 }
 
 export default function CityScene({
+  mapId,
+  renderMode,
   features,
   selectedId,
+  selectedLandmarkId,
   onSelect,
+  onSelectLandmark,
   autoRotate,
   resetSignal,
   sectorFocus = null,
@@ -557,11 +645,22 @@ export default function CityScene({
   const markerDomRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [hoveredCorridorLabel, setHoveredCorridorLabel] = useState<string | null>(null);
+  const [panGoal, setPanGoal] = useState<{ point: MapPosition; seq: number } | null>(null);
+
+  const activeMap = useMemo(
+    () => CITY_MAPS.find((m) => m.id === mapId) ?? CITY_MAPS[0],
+    [mapId]
+  );
 
   const selectedFeature = useMemo(
     () => features.find((feature) => feature.id === selectedId) ?? null,
     [features, selectedId]
   );
+
+  const selectedLandmarkCoords = useMemo(() => {
+    if (!selectedLandmarkId) return null;
+    return CIVIC_LANDMARKS.find((item) => item.id === selectedLandmarkId)?.coordinates ?? null;
+  }, [selectedLandmarkId]);
 
   const handleSelectCorridor = useCallback(
     (preferredFeatureIds: string[]) => {
@@ -571,52 +670,89 @@ export default function CityScene({
     [features, onSelect]
   );
 
+  const handlePanTo = useCallback((point: MapPosition) => {
+    setPanGoal((prev) => ({ point, seq: (prev?.seq ?? 0) + 1 }));
+  }, []);
+
   const activeId = selectedId ?? hoveredId;
   const activeFeature = useMemo(
     () => features.find((feature) => feature.id === activeId) ?? null,
     [features, activeId]
   );
 
+  const showUtilities =
+    renderMode === "xray" ||
+    mapId === "arterial-engineering" ||
+    mapId === "hydrology-basin";
+
   return (
-    <div className="ct-panel ct-panel-glow relative h-[440px] w-full overflow-hidden rounded-xl sm:h-[560px] xl:h-[calc(100vh-260px)] xl:min-h-[560px]">
+    <div className="ct-panel ct-panel-glow relative h-[460px] w-full overflow-hidden rounded-xl sm:h-[580px] xl:h-[calc(100vh-290px)] xl:min-h-[560px]">
       <div className="pointer-events-none absolute top-3 left-3 z-20 flex items-center gap-2 rounded-lg border border-cyan-500/30 bg-[#060b14]/85 px-3 py-1.5 backdrop-blur-sm">
         <Layers className="h-3.5 w-3.5 text-cyan-400" />
         <div>
-          <p className="font-mono text-[10px] font-semibold tracking-[0.15em] text-cyan-300">
-            SECTOR 04 · DHAKA URBAN MODEL
+          <p className="font-mono text-[10px] font-semibold tracking-[0.15em] text-cyan-300 uppercase">
+            {activeMap.code} · {activeMap.title}
           </p>
           <p className="font-mono text-[10px] text-slate-400">
-            {hoveredCorridorLabel ?? "Click a glowing beacon or road corridor to inspect the record"}
+            {hoveredCorridorLabel ?? activeMap.highlightNote}
           </p>
         </div>
       </div>
 
       <div className="pointer-events-none absolute top-3 right-3 z-20 hidden items-center gap-1.5 rounded-lg border border-cyan-500/25 bg-[#060b14]/85 px-2.5 py-1 font-mono text-[10px] text-cyan-200 backdrop-blur-sm sm:flex">
         <MousePointerClick className="h-3.5 w-3.5 text-cyan-400" />
-        <span>{features.length} monitored records</span>
+        <span>
+          {features.length} beacons · {DHAKA_BUILDINGS.length} buildings
+        </span>
       </div>
 
       <Canvas
         dpr={[1, 1.5]}
-        camera={{ position: [12.6, 10.6, 14.2], fov: 42, near: 0.2, far: 90 }}
+        camera={{ position: [16.5, 13.5, 18.0], fov: 42, near: 0.2, far: 110 }}
         gl={{ antialias: true, powerPreference: "high-performance" }}
-        onPointerMissed={() => onSelect(null)}
+        onPointerMissed={() => {
+          onSelect(null);
+          onSelectLandmark(null);
+        }}
       >
         <color attach="background" args={["#050a14"]} />
-        <fog attach="fog" args={["#050a14", 20, 40]} />
+        <fog attach="fog" args={["#050a14", 26, 56]} />
 
-        <ambientLight intensity={0.72} color="#94a3b8" />
-        <directionalLight position={[10, 16, 8]} intensity={1.15} color="#bae6fd" />
-        <directionalLight position={[-9, 8, -10]} intensity={0.45} color="#22d3ee" />
+        <ambientLight intensity={0.78} color="#94a3b8" />
+        <directionalLight position={[14, 20, 10]} intensity={1.2} color="#bae6fd" />
+        <directionalLight position={[-12, 10, -12]} intensity={0.48} color="#22d3ee" />
 
-        <DhakaRoadsAndCanal
+        <DhakaDistrictRoads
+          mapId={mapId}
+          renderMode={renderMode}
           onSelectCorridor={handleSelectCorridor}
           onHoverCorridor={setHoveredCorridorLabel}
         />
-        {DHAKA_BUILDINGS.map((b) => (
-          <MemoBuilding key={b.id} b={b} />
-        ))}
-        <StreetlightCorridor />
+
+        {DHAKA_BUILDINGS.map((b) => {
+          const isEmphasized =
+            activeMap.sectors.length === 0 || activeMap.sectors.includes(b.sectorId);
+          return (
+            <DetailedBuilding
+              key={b.id}
+              b={b}
+              renderMode={renderMode}
+              isEmphasized={isEmphasized}
+              isSelectedLandmark={b.landmarkId !== undefined && b.landmarkId === selectedLandmarkId}
+              onSelectLandmark={(landmarkId) => onSelectLandmark(landmarkId)}
+            />
+          );
+        })}
+
+        <ElevatedMetroLine
+          renderMode={renderMode}
+          onSelectStation={() => onSelectLandmark("LMD-MRT")}
+        />
+        <BridgesAndGreenery renderMode={renderMode} />
+        <StreetlightCorridor renderMode={renderMode} />
+        <SubsurfaceUtilities visible={showUtilities} />
+        <MapOverlayLayers mapId={mapId} renderMode={renderMode} />
+        <TrafficPulses visible={renderMode === "twin"} />
 
         {features.map((feature) => (
           <MemoFeatureMarker
@@ -635,14 +771,17 @@ export default function CityScene({
         />
 
         <CameraRig
+          mapId={mapId}
           autoRotate={autoRotate}
           resetSignal={resetSignal}
           selectedFeature={selectedFeature}
+          selectedLandmarkCoords={selectedLandmarkCoords}
           sectorFocus={sectorFocus}
+          panGoal={panGoal}
         />
       </Canvas>
 
-      {/* Projected label for the hovered or selected beacon only */}
+      {/* Projected label for the hovered or selected beacon */}
       <div className="pointer-events-none absolute inset-0 z-10 overflow-hidden">
         {activeFeature ? (
           <button
@@ -661,10 +800,19 @@ export default function CityScene({
         ) : null}
       </div>
 
-      <div className="pointer-events-none absolute right-3 bottom-3 left-3 z-20 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2 rounded-lg border border-slate-700/70 bg-[#060b14]/85 px-2.5 py-1 font-mono text-[10px] text-slate-300 backdrop-blur-sm">
-          <Compass className="h-3.5 w-3.5 text-cyan-400" />
-          <span>Drag: rotate · Right-drag: pan · Scroll: zoom</span>
+      {/* Bottom HUD: Radar mini-map, navigation hint, and beacon legend */}
+      <div className="pointer-events-none absolute right-3 bottom-3 left-3 z-20 flex flex-wrap items-end justify-between gap-2">
+        <div className="pointer-events-auto flex flex-col items-start gap-2">
+          <RadarMiniMap
+            features={features}
+            selectedId={selectedId}
+            selectedLandmarkId={selectedLandmarkId}
+            onPanTo={handlePanTo}
+          />
+          <div className="pointer-events-none flex items-center gap-2 rounded-lg border border-slate-700/70 bg-[#060b14]/85 px-2.5 py-1 font-mono text-[10px] text-slate-300 backdrop-blur-sm">
+            <Compass className="h-3.5 w-3.5 text-cyan-400" />
+            <span>Drag: rotate · Right-drag: pan · Scroll: zoom · Click landmarks & beacons</span>
+          </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-700/70 bg-[#060b14]/90 px-2.5 py-1 backdrop-blur-sm">
