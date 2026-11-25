@@ -2,17 +2,21 @@
 
 import { usePathname } from "next/navigation";
 import { Menu } from "lucide-react";
+import { DemoBadge } from "@/components/ui/Badge";
 import { findNavItem } from "@/lib/navigation";
 import type { SearchIssue } from "@/lib/search";
+import type { ActivityEvent } from "@/lib/stats";
 import GlobalSearch from "./GlobalSearch";
 import NotificationsMenu from "./NotificationsMenu";
 
 export default function TopBar({
   onOpenMobileNav,
   searchIssues,
+  recentEvents,
 }: {
   onOpenMobileNav: () => void;
   searchIssues: SearchIssue[];
+  recentEvents: ActivityEvent[];
 }) {
   const pathname = usePathname();
   const current = findNavItem(pathname);
@@ -39,8 +43,9 @@ export default function TopBar({
         </div>
 
         <div className="ml-auto flex shrink-0 items-center gap-2">
+          <DemoBadge label="DEMO DATA" className="hidden md:inline-flex" />
           <GlobalSearch issues={searchIssues} />
-          <NotificationsMenu />
+          <NotificationsMenu events={recentEvents} />
 
           <div
             className="hidden items-center gap-2 rounded-lg border border-slate-700/80 bg-slate-900/70 px-2 py-1 sm:flex"

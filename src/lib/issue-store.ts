@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { ISSUES, SECTORS } from "@/data";
+import { EVIDENCE, ISSUES, PROJECTS, SECTORS } from "@/data";
 import type {
   Evidence,
   Issue,
@@ -83,6 +83,14 @@ export function findRuntimeEvidence(id: string): Evidence | undefined {
   return readStore().evidence.find((item) => item.id === id);
 }
 
+export function listRuntimeEvidence(): Evidence[] {
+  return readStore().evidence;
+}
+
+export function listAllEvidence(): Evidence[] {
+  return [...EVIDENCE, ...readStore().evidence];
+}
+
 /** Every issue recorded at the same physical location, oldest first. */
 export function issuesAtLocation(locationKey: string): Issue[] {
   return listIssues()
@@ -110,11 +118,113 @@ export function slugifyLocation(value: string): string {
     .slice(0, 60);
 }
 
-function positionFor(sectorId: string, seed: string): MapPosition {
+const CORRIDOR_PATTERNS: { locationKey: string; terms: string[] }[] = [
+  {
+    locationKey: "begum-rokeya-sarani-junction",
+    terms: ["begum rokeya", "rokeya sarani", "link road"],
+  },
+  {
+    locationKey: "west-canal-outfall",
+    terms: ["canal outfall", "canal west blocks", "western storm canal"],
+  },
+  {
+    locationKey: "north-gate-market-lane",
+    terms: ["market lane"],
+  },
+  {
+    locationKey: "canal-road-trench",
+    terms: ["canal road"],
+  },
+  {
+    locationKey: "civic-core-junction",
+    terms: ["civic core"],
+  },
+  {
+    locationKey: "east-boulevard-school-zone",
+    terms: ["civic boulevard", "school"],
+  },
+  {
+    locationKey: "south-market-crossing",
+    terms: ["bus interchange", "crossing"],
+  },
+  {
+    locationKey: "south-market-lane-4",
+    terms: ["lane 4", "south outfall"],
+  },
+  {
+    locationKey: "north-gate-feeder",
+    terms: ["feeder"],
+  },
+];
+
+function resolveLocationMatch(
+  location: string,
+  sectorId: string,
+  explicitKey?: string
+): {
+  locationKey: string;
+  projectId?: string;
+  reopensIssueId?: string;
+  baseCoordinates?: MapPosition;
+} | null {
+  const all = listIssues();
+  const knownKeys = new Set<string>([
+    ...PROJECTS.map((project) => project.locationKey),
+    ...all.map((issue) => issue.locationKey),
+  ]);
+
+  let matchedKey: string | undefined;
+  const trimmedExplicit = explicitKey?.trim();
+  if (trimmedExplicit && knownKeys.has(trimmedExplicit)) {
+    matchedKey = trimmedExplicit;
+  } else {
+    const normalized = location.toLowerCase();
+    const pattern = CORRIDOR_PATTERNS.find((entry) =>
+      entry.terms.some((term) => normalized.includes(term))
+    );
+    if (pattern) {
+      matchedKey = pattern.locationKey;
+    }
+  }
+
+  if (!matchedKey) return null;
+
+  const matchedProject =
+    PROJECTS.find(
+      (project) => project.locationKey === matchedKey && project.sectorId === sectorId
+    ) ?? PROJECTS.find((project) => project.locationKey === matchedKey);
+  const matchingIssues = all
+    .filter((issue) => issue.locationKey === matchedKey)
+    .sort((a, b) => a.reportedAt.localeCompare(b.reportedAt));
+  const resolvedPrior = matchingIssues.find((issue) => issue.status === "resolved");
+
+  return {
+    locationKey: matchedKey,
+    projectId: matchedProject?.id ?? matchingIssues.find((issue) => issue.projectId)?.projectId,
+    reopensIssueId: resolvedPrior?.id,
+    baseCoordinates:
+      matchedProject?.coordinates ??
+      matchingIssues[matchingIssues.length - 1]?.coordinates,
+  };
+}
+
+function positionFor(
+  sectorId: string,
+  seed: string,
+  baseCoordinates?: MapPosition
+): MapPosition {
   const sector = SECTORS.find((item) => item.id === sectorId) ?? SECTORS[0];
   let hash = 0;
   for (let index = 0; index < seed.length; index += 1) {
     hash = (hash * 31 + seed.charCodeAt(index)) % 100_000;
+  }
+  if (baseCoordinates) {
+    const offsetX = (((hash % 15) - 7) / 20);
+    const offsetZ = (((Math.floor(hash / 15) % 15) - 7) / 20);
+    return [
+      Number((baseCoordinates[0] + offsetX).toFixed(2)),
+      Number((baseCoordinates[1] + offsetZ).toFixed(2)),
+    ];
   }
   const offsetX = ((hash % 21) - 10) / 12;
   const offsetZ = ((Math.floor(hash / 21) % 21) - 10) / 12;
@@ -130,6 +240,7 @@ export interface CreateIssueInput {
   description: string;
   location: string;
   sectorId: string;
+  locationKey?: string;
   photoDataUrl?: string;
 }
 
@@ -141,6 +252,7 @@ export function createIssue(input: CreateIssueInput): Issue {
   // The dataset is a frozen snapshot, so new reports are dated to the snapshot
   // rather than the wall clock — otherwise they would sit outside the scenario.
   const today = DEMO_NOW;
+  const match = resolveLocationMatch(input.location, input.sectorId, input.locationKey);
 
   const evidence: Evidence[] = [];
   if (input.photoDataUrl) {
@@ -165,13 +277,15 @@ export function createIssue(input: CreateIssueInput): Issue {
     description: input.description,
     sectorId: input.sectorId,
     location: input.location,
-    locationKey: slugifyLocation(input.location) || slugifyLocation(id),
-    coordinates: positionFor(input.sectorId, id),
+    locationKey: match?.locationKey ?? (slugifyLocation(input.location) || slugifyLocation(id)),
+    coordinates: positionFor(input.sectorId, id, match?.baseCoordinates),
     status: "reported",
     severity: "moderate",
     reportedAt: today,
     updatedAt: today,
     reportCount: 1,
+    ...(match?.reopensIssueId ? { reopensIssueId: match.reopensIssueId } : {}),
+    ...(match?.projectId ? { projectId: match.projectId } : {}),
     evidenceIds: evidence.map((item) => item.id),
     history: [
       {

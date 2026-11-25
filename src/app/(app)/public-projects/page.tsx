@@ -1,20 +1,30 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight, Building2, CalendarClock, FolderKanban, MapPin } from "lucide-react";
+import {
+  ArrowRight,
+  Building2,
+  CalendarClock,
+  FolderKanban,
+  LayoutGrid,
+  MapPin,
+  Sparkles,
+  Table2,
+} from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Panel, PanelHeader } from "@/components/ui/Panel";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState, ProgressBar, SpendBar, StatCard } from "@/components/ui/Data";
 import { getSector, PROJECTS, SECTORS } from "@/data";
 import type { ProjectStatus } from "@/types/citytrace";
-import { PROJECT_STATUS_LABELS } from "@/types/citytrace";
-import { getBudgetTotals, getProjectOverdueDays } from "@/lib/stats";
+import { CATEGORY_LABELS, PROJECT_STATUS_LABELS } from "@/types/citytrace";
+import { getBudgetTotals, getMilestoneTotals, getProjectOverdueDays } from "@/lib/stats";
 import {
   TONES,
   formatBdtCompact,
   formatDate,
   formatPercent,
   projectStatusTone,
+  severityTone,
 } from "@/utils/formatters";
 
 export const metadata: Metadata = {
@@ -53,9 +63,13 @@ export default async function PublicProjectsPage({
   const params = await searchParams;
   const statusParam = asString(params.status);
   const sectorParam = asString(params.sector);
+  const viewParam = asString(params.view);
   const focus = asString(params.focus);
   const query = asString(params.q);
   const needle = query?.toLowerCase();
+
+  const view: "cards" | "table" = viewParam === "table" ? "table" : "cards";
+  const viewValue = view === "table" ? "table" : undefined;
 
   const status = PROJECT_STATUSES.includes(statusParam as ProjectStatus)
     ? (statusParam as ProjectStatus)
@@ -131,17 +145,58 @@ export default async function PublicProjectsPage({
           title="Filter"
           description="By delivery status or sector."
           actions={
-            status || sector ? (
-              <Link href="/public-projects" className="font-mono text-[10px] text-cyan-300 hover:text-cyan-200">
-                Clear
-              </Link>
-            ) : null
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="inline-flex rounded-lg border border-slate-700/80 bg-[#07101d] p-0.5">
+                <Link
+                  href={buildHref({
+                    status: statusParam,
+                    sector: sectorParam,
+                    q: query,
+                  })}
+                  aria-current={view === "cards" ? "page" : undefined}
+                  className={`inline-flex items-center gap-1 rounded-md px-2 py-1 font-mono text-[10px] transition-colors ${
+                    view === "cards"
+                      ? "bg-cyan-500/20 text-cyan-200"
+                      : "text-slate-400 hover:text-slate-200"
+                  }`}
+                >
+                  <LayoutGrid className="h-3 w-3" />
+                  Cards
+                </Link>
+                <Link
+                  href={buildHref({
+                    status: statusParam,
+                    sector: sectorParam,
+                    q: query,
+                    view: "table",
+                  })}
+                  aria-current={view === "table" ? "page" : undefined}
+                  className={`inline-flex items-center gap-1 rounded-md px-2 py-1 font-mono text-[10px] transition-colors ${
+                    view === "table"
+                      ? "bg-cyan-500/20 text-cyan-200"
+                      : "text-slate-400 hover:text-slate-200"
+                  }`}
+                >
+                  <Table2 className="h-3 w-3" />
+                  Table
+                </Link>
+              </div>
+              {status || sector || query ? (
+                <Link
+                  href={buildHref({ view: viewValue })}
+                  className="font-mono text-[10px] text-cyan-300 hover:text-cyan-200"
+                >
+                  Clear
+                </Link>
+              ) : null}
+            </div>
           }
         />
         <div className="flex flex-wrap items-center gap-1.5">
           <form action="/public-projects" method="get" className="flex w-full flex-wrap items-center gap-2">
             {status ? <input type="hidden" name="status" value={status} /> : null}
             {sector ? <input type="hidden" name="sector" value={sector} /> : null}
+            {view === "table" ? <input type="hidden" name="view" value="table" /> : null}
             <input
               type="search"
               name="q"
@@ -158,7 +213,7 @@ export default async function PublicProjectsPage({
             </button>
             {query ? (
               <Link
-                href={buildHref({ status: statusParam, sector: sectorParam })}
+                href={buildHref({ status: statusParam, sector: sectorParam, view: viewValue })}
                 className="font-mono text-[10px] text-slate-400 hover:text-cyan-200"
               >
                 Clear search
@@ -169,7 +224,7 @@ export default async function PublicProjectsPage({
 
         <div className="flex flex-wrap items-center gap-1.5">
           <Link
-            href={buildHref({ sector: sectorParam })}
+            href={buildHref({ sector: sectorParam, q: query, view: viewValue })}
             className={`rounded-full border px-2 py-0.5 font-mono text-[10px] transition-colors ${
               !status
                 ? "border-cyan-400/60 bg-cyan-500/15 text-cyan-200"
@@ -183,7 +238,7 @@ export default async function PublicProjectsPage({
             return (
               <Link
                 key={value}
-                href={buildHref({ status: value, sector: sectorParam })}
+                href={buildHref({ status: value, sector: sectorParam, q: query, view: viewValue })}
                 className={`rounded-full border px-2 py-0.5 font-mono text-[10px] transition-colors ${
                   status === value
                     ? "border-cyan-400/60 bg-cyan-500/15 text-cyan-200"
@@ -196,7 +251,7 @@ export default async function PublicProjectsPage({
           })}
           <span className="mx-1 h-4 w-px bg-slate-700" />
           <Link
-            href={buildHref({ status: statusParam })}
+            href={buildHref({ status: statusParam, q: query, view: viewValue })}
             className={`rounded-full border px-2 py-0.5 font-mono text-[10px] transition-colors ${
               !sector
                 ? "border-cyan-400/60 bg-cyan-500/15 text-cyan-200"
@@ -208,7 +263,7 @@ export default async function PublicProjectsPage({
           {SECTORS.map((item) => (
             <Link
               key={item.id}
-              href={buildHref({ status: statusParam, sector: item.id })}
+              href={buildHref({ status: statusParam, sector: item.id, q: query, view: viewValue })}
               className={`rounded-full border px-2 py-0.5 font-mono text-[10px] transition-colors ${
                 sector === item.id
                   ? "border-cyan-400/60 bg-cyan-500/15 text-cyan-200"
@@ -228,27 +283,167 @@ export default async function PublicProjectsPage({
           description="Every sanctioned work is recorded here; try clearing the status or sector filter."
           action={
             <Link
-              href="/public-projects"
+              href={buildHref({ view: viewValue })}
               className="rounded-lg border border-cyan-400/50 bg-cyan-500/15 px-3 py-1.5 font-mono text-[11px] font-semibold text-cyan-200 hover:bg-cyan-500/25"
             >
               Reset filters
             </Link>
           }
         />
+      ) : view === "cards" ? (
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+          {filtered.map((project) => {
+            const tone = projectStatusTone(project.status);
+            const projectSector = getSector(project.sectorId);
+            const overdue = getProjectOverdueDays(project);
+            const milestones = getMilestoneTotals(project);
+            const isFocused = focus === project.id;
+            const reportedPct =
+              project.allocatedBudgetBdt > 0
+                ? (project.reportedExpenditureBdt / project.allocatedBudgetBdt) * 100
+                : 0;
+
+            return (
+              <Panel
+                key={project.id}
+                glow={isFocused}
+                className={`flex flex-col gap-3 p-4 transition-colors hover:border-cyan-500/40 ${
+                  isFocused ? "ring-1 ring-cyan-400/50" : ""
+                }`}
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="rounded border border-cyan-500/35 bg-cyan-500/10 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-cyan-300">
+                      {project.code}
+                    </span>
+                    <Badge tone={severityTone(project.severity)}>
+                      {project.severity.toUpperCase()}
+                    </Badge>
+                    <Badge tone={tone} dot>
+                      {PROJECT_STATUS_LABELS[project.status]}
+                    </Badge>
+                    {overdue > 0 ? <Badge tone="warn">{overdue}d late</Badge> : null}
+                  </div>
+                  <span className="font-mono text-[10px] text-slate-400">
+                    {projectSector?.code ?? project.sectorId} · {CATEGORY_LABELS[project.category]}
+                  </span>
+                </div>
+
+                <div>
+                  <Link href={`/public-projects/${project.id}`} className="group block">
+                    <h3 className="text-[13px] font-bold leading-snug text-slate-50 group-hover:text-cyan-200">
+                      {project.name}
+                    </h3>
+                  </Link>
+                  <p className="mt-1 flex items-start gap-1.5 text-[11px] text-slate-400">
+                    <MapPin className="mt-0.5 h-3 w-3 shrink-0 text-cyan-400" />
+                    <span>{project.location}</span>
+                  </p>
+                  <p className="mt-0.5 font-mono text-[10px] text-slate-500">{project.authority}</p>
+                </div>
+
+                <div className="rounded-lg border border-slate-800 bg-[#07101d] p-2.5">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2 font-mono text-[10px]">
+                    <span className="text-slate-400">
+                      {formatBdtCompact(project.reportedExpenditureBdt)} reported of{" "}
+                      {formatBdtCompact(project.allocatedBudgetBdt)}
+                    </span>
+                    <span className="font-semibold text-cyan-200">
+                      {formatPercent(reportedPct, 0)}
+                    </span>
+                  </div>
+                  <div className="mt-1.5">
+                    <SpendBar
+                      allocated={project.allocatedBudgetBdt}
+                      reported={project.reportedExpenditureBdt}
+                      verified={project.verifiedExpenditureBdt}
+                      height="h-2"
+                    />
+                  </div>
+                  <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2 font-mono text-[10px]">
+                    <span
+                      className={
+                        project.verifiedExpenditureBdt === undefined
+                          ? TONES.warn.label
+                          : TONES.ok.label
+                      }
+                    >
+                      {project.verifiedExpenditureBdt === undefined
+                        ? "Missing verified spend"
+                        : `${formatBdtCompact(project.verifiedExpenditureBdt)} verified`}
+                    </span>
+                    <span className="text-slate-400">
+                      Planned {formatDate(project.plannedCompletionDate)}
+                    </span>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between font-mono text-[10px] text-slate-400">
+                    <span>
+                      Physical progress · {milestones.met}/{milestones.total} milestones met
+                      {milestones.missed > 0 ? ` · ${milestones.missed} missed` : ""}
+                    </span>
+                    <span className="font-semibold text-slate-200">
+                      {project.verifiedProgressPercent}%
+                    </span>
+                  </div>
+                  <ProgressBar
+                    value={project.verifiedProgressPercent}
+                    tone={tone}
+                    className="mt-1 h-1.5"
+                    label={`${project.verifiedProgressPercent} percent complete`}
+                  />
+                </div>
+
+                <div className="mt-auto flex flex-wrap items-center justify-between gap-2 border-t border-slate-800/80 pt-2 font-mono text-[10px]">
+                  <div className="flex items-center gap-3">
+                    <Link
+                      href={`/city-explorer?feature=project:${project.id}`}
+                      className="inline-flex items-center gap-1 text-slate-300 hover:text-cyan-200"
+                    >
+                      <MapPin className="h-3 w-3 text-cyan-400" /> Locate on 3D map
+                    </Link>
+                    <Link
+                      href={`/ai-investigation?project=${project.id}`}
+                      className="inline-flex items-center gap-1 text-slate-300 hover:text-cyan-200"
+                    >
+                      <Sparkles className="h-3 w-3 text-cyan-400" /> Investigate
+                    </Link>
+                  </div>
+                  <Link
+                    href={`/public-projects/${project.id}`}
+                    className="inline-flex items-center gap-1 font-semibold text-cyan-300 hover:text-cyan-200"
+                  >
+                    Project ledger <ArrowRight className="h-3 w-3" />
+                  </Link>
+                </div>
+              </Panel>
+            );
+          })}
+        </div>
       ) : (
         <Panel className="overflow-hidden p-0">
-          <div className="ct-scroll overflow-x-auto">
+          <div
+            tabIndex={0}
+            role="region"
+            aria-label="Sanctioned public projects table"
+            className="ct-scroll overflow-x-auto"
+          >
             <table className="w-full min-w-[980px] border-collapse text-left">
-              <thead>
-                <tr className="border-b border-slate-800 bg-[#0a1421] font-mono text-[10px] tracking-wider text-slate-400 uppercase">
-                  <th className="px-3 py-2 font-semibold">Project</th>
-                  <th className="px-3 py-2 font-semibold">Sector</th>
-                  <th className="px-3 py-2 font-semibold">Status</th>
-                  <th className="px-3 py-2 text-right font-semibold">Allocated</th>
-                  <th className="px-3 py-2 text-right font-semibold">Reported</th>
-                  <th className="px-3 py-2 font-semibold">Spend position</th>
-                  <th className="px-3 py-2 font-semibold">Progress</th>
-                  <th className="px-3 py-2 font-semibold">Planned finish</th>
+              <caption className="sr-only">
+                Sanctioned public works showing sector, status, allocated budget, reported spend, spend position, progress, and planned finish date
+              </caption>
+              <thead className="sticky top-0 z-10 bg-[#0a1421]">
+                <tr className="border-b border-slate-800 font-mono text-[10px] tracking-wider text-slate-400 uppercase">
+                  <th scope="col" className="px-3 py-2 font-semibold">Project</th>
+                  <th scope="col" className="px-3 py-2 font-semibold">Sector</th>
+                  <th scope="col" className="px-3 py-2 font-semibold">Status</th>
+                  <th scope="col" className="px-3 py-2 text-right font-semibold">Allocated</th>
+                  <th scope="col" className="px-3 py-2 text-right font-semibold">Reported</th>
+                  <th scope="col" className="px-3 py-2 font-semibold">Spend position</th>
+                  <th scope="col" className="px-3 py-2 font-semibold">Progress</th>
+                  <th scope="col" className="px-3 py-2 font-semibold">Planned finish</th>
                 </tr>
               </thead>
               <tbody>
@@ -265,7 +460,7 @@ export default async function PublicProjectsPage({
                         isFocused ? "bg-cyan-500/10" : "hover:bg-slate-800/30"
                       }`}
                     >
-                      <td className="px-3 py-2.5 align-top">
+                      <th scope="row" className="px-3 py-2.5 align-top font-normal">
                         <Link
                           href={`/public-projects/${project.id}`}
                           className="font-mono text-[10px] font-semibold text-cyan-300 hover:text-cyan-200"
@@ -279,7 +474,7 @@ export default async function PublicProjectsPage({
                           <MapPin className="h-2.5 w-2.5" />
                           {project.location}
                         </p>
-                      </td>
+                      </th>
                       <td className="px-3 py-2.5 align-top font-mono text-[10px] text-slate-300">
                         {projectSector?.code ?? project.sectorId}
                       </td>

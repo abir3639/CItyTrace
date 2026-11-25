@@ -6,8 +6,9 @@ import InvestigationWorkbench from "@/components/ai/InvestigationWorkbench";
 import CivicAsk from "@/components/ai/CivicAsk";
 import FindingsFeed from "@/components/ai/FindingsFeed";
 import { projectsById } from "@/data";
+import { analyzeProject } from "@/lib/analysis";
 import { findAnomalies, summariseAnomalies } from "@/lib/anomalies";
-import { listIssues } from "@/lib/issue-store";
+import { listAllEvidence, listIssues } from "@/lib/issue-store";
 
 export const metadata: Metadata = {
   title: "AI Investigation · CITYTRACE",
@@ -26,8 +27,12 @@ export default async function AiInvestigationPage({
   const initialProjectId = requested && projectsById.has(requested) ? requested : null;
 
   const issues = listIssues();
+  const allEvidence = listAllEvidence();
   const findings = findAnomalies(issues);
   const summary = summariseAnomalies(findings);
+  const initialReport = initialProjectId
+    ? analyzeProject(initialProjectId, issues, allEvidence)
+    : null;
 
   return (
     <div className="flex flex-col gap-4">
@@ -94,7 +99,10 @@ export default async function AiInvestigationPage({
         </p>
       </div>
 
-      <InvestigationWorkbench initialProjectId={initialProjectId} />
+      <InvestigationWorkbench
+        initialProjectId={initialProjectId}
+        initialReport={initialReport}
+      />
     </div>
   );
 }

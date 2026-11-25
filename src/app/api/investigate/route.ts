@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { GoogleGenAI } from "@google/genai";
 import { analyzeProject, buildPromptContext } from "@/lib/analysis";
+import { listAllEvidence, listIssues } from "@/lib/issue-store";
 import type { InvestigationReport } from "@/types/citytrace";
 
 /**
@@ -79,7 +80,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON request body." }, { status: 400 });
   }
 
-  const baseline = analyzeProject(projectId);
+  const issues = listIssues();
+  const allEvidence = listAllEvidence();
+
+  const baseline = analyzeProject(projectId, issues, allEvidence);
   if (!baseline) {
     return NextResponse.json(
       { error: `Unknown projectId "${projectId}".` },
@@ -92,7 +96,7 @@ export async function POST(request: Request) {
     return NextResponse.json(baseline);
   }
 
-  const context = buildPromptContext(projectId);
+  const context = buildPromptContext(projectId, issues, allEvidence);
   if (!context) {
     return NextResponse.json(baseline);
   }

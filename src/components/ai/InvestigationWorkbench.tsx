@@ -33,16 +33,55 @@ import {
   projectStatusTone,
 } from "@/utils/formatters";
 
+const FEATURED_EXAMPLES: {
+  projectId: string;
+  code: string;
+  title: string;
+  subtitle: string;
+  tone: "danger" | "warn" | "ok";
+  badge: string;
+}[] = [
+  {
+    projectId: "P-R01",
+    code: "CT-DH-R01",
+    title: "Recurring Road Failure",
+    subtitle: "3 repairs on Begum Rokeya Link Road · 96.9% spent vs. 35% built",
+    tone: "danger",
+    badge: "Recurrence + Gap",
+  },
+  {
+    projectId: "P-WTR06",
+    code: "CT-DH-W06",
+    title: "Unverified Expenditure",
+    subtitle: "BDT 39.8M (97.1%) reported spent on Canal West with 0 verified",
+    tone: "warn",
+    badge: "Missing Audit",
+  },
+  {
+    projectId: "P-L03",
+    code: "CT-DH-L03",
+    title: "Clean Delivery Benchmark",
+    subtitle: "Smart LED corridor finished early · 100% verified spend",
+    tone: "ok",
+    badge: "Calibrated Control",
+  },
+];
+
 export default function InvestigationWorkbench({
   initialProjectId = null,
+  initialReport = null,
 }: {
   /** Deep link from a project record, e.g. `/ai-investigation?project=P-R01`. */
   initialProjectId?: string | null;
+  /** Pre-computed baseline report when deep-linked so it displays immediately. */
+  initialReport?: InvestigationReport | null;
 }) {
   const [selectedId, setSelectedId] = useState<string>(
     initialProjectId ?? PROJECTS[0].id
   );
-  const [reports, setReports] = useState<Record<string, InvestigationReport>>({});
+  const [reports, setReports] = useState<Record<string, InvestigationReport>>(() =>
+    initialReport ? { [initialReport.caseId]: initialReport } : {}
+  );
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string | null>>({});
   const [copied, setCopied] = useState(false);
@@ -55,8 +94,11 @@ export default function InvestigationWorkbench({
   const isLoading = loadingId === selected.id;
   const error = errors[selected.id] ?? null;
 
-  const run = async () => {
-    const id = selected.id;
+  const run = async (targetProjectId?: string) => {
+    const id = targetProjectId ?? selected.id;
+    if (targetProjectId && targetProjectId !== selectedId) {
+      setSelectedId(targetProjectId);
+    }
     setLoadingId(id);
     setErrors((previous) => ({ ...previous, [id]: null }));
 
@@ -113,58 +155,96 @@ export default function InvestigationWorkbench({
 
   const budget = getBudgetFor(selected);
   const overdue = getProjectOverdueDays(selected);
-  const sector = getSector(selected.sectorId);
 
   return (
-    <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-      {/* Record selector */}
-      <Panel className="flex flex-col p-0 xl:col-span-1">
-        <div className="border-b border-slate-800 px-3.5 py-3">
-          <PanelHeader
-            title="Select a record"
-            description="Ten sanctioned works are available for analysis."
-            icon={<FileSearch className="h-3.5 w-3.5" />}
-          />
-        </div>
-        <ul className="ct-scroll max-h-[70vh] divide-y divide-slate-800/70 overflow-y-auto">
-          {PROJECTS.map((project) => {
-            const active = project.id === selected.id;
-            const analysed = Boolean(reports[project.id]);
-            return (
-              <li key={project.id}>
-                <button
-                  type="button"
-                  onClick={() => setSelectedId(project.id)}
-                  className={`flex w-full flex-col gap-1 px-3.5 py-2.5 text-left transition-colors cursor-pointer ${
-                    active ? "bg-cyan-500/12" : "hover:bg-slate-800/50"
-                  }`}
-                >
-                  <span className="flex items-center justify-between gap-2">
-                    <span className="font-mono text-[10px] font-semibold text-cyan-300">
-                      {project.code}
+    <div className="flex flex-col gap-4">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+        {FEATURED_EXAMPLES.map((example) => {
+          const isSelected = selected.id === example.projectId;
+          return (
+            <button
+              key={example.projectId}
+              type="button"
+              onClick={() => void run(example.projectId)}
+              disabled={loadingId === example.projectId}
+              className={`group flex flex-col gap-1.5 rounded-xl border p-3.5 text-left transition-colors cursor-pointer disabled:opacity-60 ${
+                isSelected
+                  ? "border-cyan-400/60 bg-cyan-500/10"
+                  : "border-slate-800 bg-[#08101d] hover:border-cyan-500/40 hover:bg-[#0c182b]"
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-mono text-[10px] font-semibold text-cyan-300">
+                  {example.code}
+                </span>
+                <Badge tone={example.tone} dot>
+                  {example.badge}
+                </Badge>
+              </div>
+              <p className="text-xs font-bold text-slate-100 group-hover:text-cyan-100">
+                {example.title}
+              </p>
+              <p className="text-[11px] leading-relaxed text-slate-400">
+                {example.subtitle}
+              </p>
+              <span className="mt-auto inline-flex items-center gap-1 pt-1 font-mono text-[10px] font-semibold text-cyan-300">
+                <Sparkles className="h-3 w-3" /> Run investigation
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+        {/* Record selector */}
+        <Panel className="flex flex-col p-0 xl:col-span-1">
+          <div className="border-b border-slate-800 px-3.5 py-3">
+            <PanelHeader
+              title="Select a record"
+              description="Ten sanctioned works are available for analysis."
+              icon={<FileSearch className="h-3.5 w-3.5" />}
+            />
+          </div>
+          <ul className="ct-scroll max-h-[70vh] divide-y divide-slate-800/70 overflow-y-auto">
+            {PROJECTS.map((project) => {
+              const active = project.id === selected.id;
+              const analysed = Boolean(reports[project.id]);
+              const projectSector = getSector(project.sectorId);
+              return (
+                <li key={project.id}>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedId(project.id)}
+                    className={`flex w-full flex-col gap-1 px-3.5 py-2.5 text-left transition-colors cursor-pointer ${
+                      active ? "bg-cyan-500/12" : "hover:bg-slate-800/50"
+                    }`}
+                  >
+                    <span className="flex items-center justify-between gap-2">
+                      <span className="font-mono text-[10px] font-semibold text-cyan-300">
+                        {project.code}
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        {analysed ? (
+                          <Check className="h-3 w-3 text-emerald-400" aria-label="Report available" />
+                        ) : null}
+                        <Badge tone={projectStatusTone(project.status)}>
+                          {PROJECT_STATUS_LABELS[project.status]}
+                        </Badge>
+                      </span>
                     </span>
-                    <span className="flex items-center gap-1.5">
-                      {analysed ? (
-                        <Check className="h-3 w-3 text-emerald-400" aria-label="Report available" />
-                      ) : null}
-                      <Badge tone={projectStatusTone(project.status)}>
-                        {PROJECT_STATUS_LABELS[project.status]}
-                      </Badge>
+                    <span className="line-clamp-2 text-[11px] font-semibold leading-snug text-slate-100">
+                      {project.name}
                     </span>
-                  </span>
-                  <span className="line-clamp-2 text-[11px] font-semibold leading-snug text-slate-100">
-                    {project.name}
-                  </span>
-                  <span className="font-mono text-[9px] text-slate-500">
-                    {sector?.code ?? project.sectorId} · {formatBdtCompact(project.allocatedBudgetBdt)} ·{" "}
-                    {project.verifiedProgressPercent}% built
-                  </span>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      </Panel>
+                    <span className="font-mono text-[9px] text-slate-500">
+                      {projectSector?.code ?? project.sectorId} · {formatBdtCompact(project.allocatedBudgetBdt)} ·{" "}
+                      {project.verifiedProgressPercent}% built
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </Panel>
 
       {/* Workbench */}
       <div className="flex flex-col gap-4 xl:col-span-2">
@@ -188,7 +268,7 @@ export default function InvestigationWorkbench({
 
             <button
               type="button"
-              onClick={run}
+              onClick={() => void run()}
               disabled={isLoading}
               className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-cyan-300/60 bg-gradient-to-r from-cyan-500 to-sky-500 px-3.5 py-2 font-mono text-[11px] font-bold tracking-wider text-slate-950 uppercase shadow-[0_0_24px_-6px_rgba(34,211,238,0.7)] transition-all hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer"
             >
@@ -246,7 +326,7 @@ export default function InvestigationWorkbench({
             <p className="mt-1 text-[11px] text-red-200/85">{error}</p>
             <button
               type="button"
-              onClick={run}
+              onClick={() => void run()}
               className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-red-400/50 bg-red-500/20 px-3 py-1.5 font-mono text-[11px] text-red-100 hover:bg-red-500/30 cursor-pointer"
             >
               <RefreshCw className="h-3.5 w-3.5" /> Retry
@@ -570,6 +650,7 @@ export default function InvestigationWorkbench({
           </Panel>
         )}
       </div>
+    </div>
     </div>
   );
 }

@@ -11,6 +11,7 @@ interface Body {
   description?: unknown;
   location?: unknown;
   sectorId?: unknown;
+  locationKey?: unknown;
   photoDataUrl?: unknown;
 }
 
@@ -30,6 +31,7 @@ export async function POST(request: Request) {
   const description = asTrimmedString(body.description, 2000);
   const location = asTrimmedString(body.location, 200);
   const sectorId = asTrimmedString(body.sectorId, 16);
+  const locationKey = asTrimmedString(body.locationKey, 80);
   const category = asTrimmedString(body.category, 32) as IssueCategory;
 
   const errors: Record<string, string> = {};
@@ -63,6 +65,7 @@ export async function POST(request: Request) {
     description,
     location,
     sectorId,
+    ...(locationKey ? { locationKey } : {}),
     photoDataUrl,
   });
 

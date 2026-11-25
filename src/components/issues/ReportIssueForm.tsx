@@ -13,6 +13,38 @@ import {
 
 const MAX_FILE_BYTES = 1_500_000;
 
+const CORRIDOR_PRESETS: {
+  label: string;
+  location: string;
+  sectorId: string;
+  locationKey: string;
+}[] = [
+  {
+    label: "Begum Rokeya Link Road",
+    location: "Begum Rokeya Sarani Link Road, junction approach",
+    sectorId: "S04",
+    locationKey: "begum-rokeya-sarani-junction",
+  },
+  {
+    label: "Canal West blocks A–D",
+    location: "Canal West blocks A–D",
+    sectorId: "S02",
+    locationKey: "west-canal-outfall",
+  },
+  {
+    label: "Market Lane, North Gate",
+    location: "Market Lane, North Gate",
+    sectorId: "S07",
+    locationKey: "north-gate-market-lane",
+  },
+  {
+    label: "Civic Core Intersection",
+    location: "Civic Core Main Intersection, Ward 12",
+    sectorId: "S06",
+    locationKey: "civic-core-junction",
+  },
+];
+
 interface FieldErrors {
   title?: string;
   description?: string;
@@ -30,6 +62,7 @@ export default function ReportIssueForm() {
   const [category, setCategory] = useState<IssueCategory>("road");
   const [sectorId, setSectorId] = useState(SECTORS[0].id);
   const [location, setLocation] = useState("");
+  const [locationKey, setLocationKey] = useState<string | undefined>(undefined);
   const [description, setDescription] = useState("");
   const [photo, setPhoto] = useState<{ name: string; dataUrl: string } | null>(null);
 
@@ -79,6 +112,7 @@ export default function ReportIssueForm() {
           category,
           sectorId,
           location,
+          locationKey,
           description,
           photoDataUrl: photo?.dataUrl,
         }),
@@ -110,11 +144,16 @@ export default function ReportIssueForm() {
   return (
     <form onSubmit={submit} className="flex flex-col gap-4">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <label className="flex flex-col gap-1 sm:col-span-2">
-          <span className="font-mono text-[10px] font-semibold tracking-wider text-slate-400 uppercase">
+        <div className="flex flex-col gap-1 sm:col-span-2">
+          <label
+            htmlFor="issue-title"
+            className="font-mono text-[10px] font-semibold tracking-wider text-slate-400 uppercase"
+          >
             Issue title *
-          </span>
+          </label>
           <input
+            id="issue-title"
+            required
             value={title}
             onChange={(event) => setTitle(event.target.value)}
             maxLength={120}
@@ -124,13 +163,18 @@ export default function ReportIssueForm() {
           {errors.title ? (
             <span className="text-[10px] text-red-300">{errors.title}</span>
           ) : null}
-        </label>
+        </div>
 
-        <label className="flex flex-col gap-1">
-          <span className="font-mono text-[10px] font-semibold tracking-wider text-slate-400 uppercase">
+        <div className="flex flex-col gap-1">
+          <label
+            htmlFor="issue-category"
+            className="font-mono text-[10px] font-semibold tracking-wider text-slate-400 uppercase"
+          >
             Category *
-          </span>
+          </label>
           <select
+            id="issue-category"
+            required
             value={category}
             onChange={(event) => setCategory(event.target.value as IssueCategory)}
             className={fieldClasses}
@@ -144,13 +188,18 @@ export default function ReportIssueForm() {
           {errors.category ? (
             <span className="text-[10px] text-red-300">{errors.category}</span>
           ) : null}
-        </label>
+        </div>
 
-        <label className="flex flex-col gap-1">
-          <span className="font-mono text-[10px] font-semibold tracking-wider text-slate-400 uppercase">
+        <div className="flex flex-col gap-1">
+          <label
+            htmlFor="issue-sector"
+            className="font-mono text-[10px] font-semibold tracking-wider text-slate-400 uppercase"
+          >
             Sector *
-          </span>
+          </label>
           <select
+            id="issue-sector"
+            required
             value={sectorId}
             onChange={(event) => setSectorId(event.target.value)}
             className={fieldClasses}
@@ -164,15 +213,49 @@ export default function ReportIssueForm() {
           {errors.sectorId ? (
             <span className="text-[10px] text-red-300">{errors.sectorId}</span>
           ) : null}
-        </label>
+        </div>
 
-        <label className="flex flex-col gap-1 sm:col-span-2">
-          <span className="font-mono text-[10px] font-semibold tracking-wider text-slate-400 uppercase">
+        <div className="flex flex-col gap-1.5 sm:col-span-2">
+          <label
+            htmlFor="issue-location"
+            className="font-mono text-[10px] font-semibold tracking-wider text-slate-400 uppercase"
+          >
             Street or landmark *
-          </span>
+          </label>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="font-mono text-[9px] tracking-wider text-slate-500 uppercase">
+              Known corridors
+            </span>
+            {CORRIDOR_PRESETS.map((preset) => {
+              const active = locationKey === preset.locationKey;
+              return (
+                <button
+                  key={preset.locationKey}
+                  type="button"
+                  onClick={() => {
+                    setLocation(preset.location);
+                    setSectorId(preset.sectorId);
+                    setLocationKey(preset.locationKey);
+                  }}
+                  className={`rounded-full border px-2 py-0.5 font-mono text-[10px] transition-colors cursor-pointer ${
+                    active
+                      ? "border-cyan-400/60 bg-cyan-500/15 text-cyan-200"
+                      : "border-slate-700 text-slate-300 hover:border-cyan-500/40 hover:text-cyan-200"
+                  }`}
+                >
+                  {preset.label}
+                </button>
+              );
+            })}
+          </div>
           <input
+            id="issue-location"
+            required
             value={location}
-            onChange={(event) => setLocation(event.target.value)}
+            onChange={(event) => {
+              setLocation(event.target.value);
+              setLocationKey(undefined);
+            }}
             maxLength={200}
             placeholder="e.g. Begum Rokeya Sarani Link Road, near the junction"
             className={fieldClasses}
@@ -180,13 +263,18 @@ export default function ReportIssueForm() {
           {errors.location ? (
             <span className="text-[10px] text-red-300">{errors.location}</span>
           ) : null}
-        </label>
+        </div>
 
-        <label className="flex flex-col gap-1 sm:col-span-2">
-          <span className="font-mono text-[10px] font-semibold tracking-wider text-slate-400 uppercase">
+        <div className="flex flex-col gap-1 sm:col-span-2">
+          <label
+            htmlFor="issue-description"
+            className="font-mono text-[10px] font-semibold tracking-wider text-slate-400 uppercase"
+          >
             What is wrong? *
-          </span>
+          </label>
           <textarea
+            id="issue-description"
+            required
             value={description}
             onChange={(event) => setDescription(event.target.value)}
             rows={4}
@@ -198,7 +286,7 @@ export default function ReportIssueForm() {
             <span>{errors.description ? <span className="text-red-300">{errors.description}</span> : "Be specific — this becomes the permanent record."}</span>
             <span>{description.length}/2000</span>
           </span>
-        </label>
+        </div>
       </div>
 
       {/* Photo attachment */}

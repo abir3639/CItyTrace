@@ -40,7 +40,7 @@ export default function Sidebar({
 
   return (
     <aside
-      aria-label="Primary navigation"
+      aria-label="Application sidebar"
       className={[
         "fixed top-0 left-0 z-50 flex h-full w-[248px] flex-col border-r border-slate-800/80 bg-[#070d18]/96 backdrop-blur-lg",
         "transition-[transform,width] duration-200",
@@ -65,7 +65,7 @@ export default function Sidebar({
       </div>
 
       {/* Navigation */}
-      <nav className="ct-scroll flex-1 overflow-y-auto px-2 py-3">
+      <nav aria-label="Primary" className="ct-scroll flex-1 overflow-y-auto px-2 py-3">
         <ul className="space-y-1">
           {NAV_ITEMS.map((item) => {
             const active =

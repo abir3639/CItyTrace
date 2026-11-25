@@ -7,6 +7,7 @@ import {
 } from "@/data";
 import type {
   CivicHealthSummary,
+  Evidence,
   Issue,
   IssueCategory,
   IssueStatus,
@@ -305,15 +306,18 @@ export interface EvidenceCoverage {
   recordsWithoutEvidence: number;
 }
 
-export function getEvidenceCoverage(issues: Issue[] = ISSUES): EvidenceCoverage {
+export function getEvidenceCoverage(
+  issues: Issue[] = ISSUES,
+  evidenceItems: Evidence[] = EVIDENCE
+): EvidenceCoverage {
   const projectsWithEvidence = PROJECTS.filter((p) => p.evidenceIds.length > 0);
   const issuesWithEvidence = issues.filter((i) => i.evidenceIds.length > 0);
-  const evidenceVerified = EVIDENCE.filter((item) => item.verified).length;
+  const evidenceVerified = evidenceItems.filter((item) => item.verified).length;
 
   return {
-    evidenceTotal: EVIDENCE.length,
+    evidenceTotal: evidenceItems.length,
     evidenceVerified,
-    verifiedPercent: EVIDENCE.length > 0 ? (evidenceVerified / EVIDENCE.length) * 100 : 0,
+    verifiedPercent: evidenceItems.length > 0 ? (evidenceVerified / evidenceItems.length) * 100 : 0,
     projectsTotal: PROJECTS.length,
     projectsWithEvidence: projectsWithEvidence.length,
     projectsWithoutEvidence: PROJECTS.length - projectsWithEvidence.length,

@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import Sidebar from "./Sidebar";
 import TopBar from "./TopBar";
 import type { SearchIssue } from "@/lib/search";
+import type { ActivityEvent } from "@/lib/stats";
 
 const STORAGE_KEY = "citytrace.sidebarCollapsed";
 
@@ -15,9 +16,11 @@ const STORAGE_KEY = "citytrace.sidebarCollapsed";
 export default function AppShell({
   children,
   searchIssues,
+  recentEvents,
 }: {
   children: React.ReactNode;
   searchIssues: SearchIssue[];
+  recentEvents: ActivityEvent[];
 }) {
   const [collapsed, setCollapsed] = useState(false);
   /**
@@ -56,6 +59,13 @@ export default function AppShell({
 
   return (
     <div className="min-h-screen">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[60] focus:rounded-lg focus:border focus:border-cyan-400 focus:bg-[#070d18] focus:px-3 focus:py-1.5 focus:font-mono focus:text-xs focus:font-semibold focus:text-cyan-200"
+      >
+        Skip to main content
+      </a>
+
       {mobileOpen ? (
         <button
           type="button"
@@ -81,10 +91,12 @@ export default function AppShell({
         <TopBar
           onOpenMobileNav={() => setMobileOpenPath(pathname)}
           searchIssues={searchIssues}
+          recentEvents={recentEvents}
         />
 
         <main
           id="main-content"
+          tabIndex={-1}
           className="mx-auto w-full max-w-[1560px] flex-1 px-4 py-5 lg:px-6 lg:py-6"
         >
           {children}

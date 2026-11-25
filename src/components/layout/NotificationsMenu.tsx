@@ -3,20 +3,17 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, Bell, X } from "lucide-react";
-import { getActivitySince } from "@/lib/stats";
+import type { ActivityEvent } from "@/lib/stats";
 import { ISSUE_STATUS_LABELS } from "@/types/citytrace";
 import { TONES, formatDate, issueStatusTone } from "@/utils/formatters";
 
 /**
- * Notification indicator backed by the real issue history — every entry is an
- * actual status event from the dataset, not a fabricated alert.
+ * Notification indicator backed by the live issue history — every entry is an
+ * actual status event from the dataset (including citizen reports), not a fabricated alert.
  */
-export default function NotificationsMenu() {
+export default function NotificationsMenu({ events }: { events: ActivityEvent[] }) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
-
-  // Events from the last two weeks of the simulated snapshot.
-  const events = getActivitySince(14, 6);
 
   useEffect(() => {
     if (!open) return;

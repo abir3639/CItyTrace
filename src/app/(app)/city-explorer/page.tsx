@@ -4,7 +4,7 @@ import { ArrowRight, Coins, ShieldAlert, Wallet } from "lucide-react";
 import CityExplorer from "@/components/city/CityExplorer";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { toMapFeatures } from "@/data";
-import { listIssues } from "@/lib/issue-store";
+import { listAllEvidence, listIssues } from "@/lib/issue-store";
 
 export const dynamic = "force-dynamic";
 
@@ -24,8 +24,10 @@ export default async function CityExplorerPage({
       : null;
 
   // Citizen reports are part of the live issue list, so they become red
-  // markers on the map the moment they are filed.
-  const features = toMapFeatures(listIssues());
+  // markers on the map and render with full evidence the moment they are filed.
+  const issues = listIssues();
+  const evidence = listAllEvidence();
+  const features = toMapFeatures(issues);
 
   return (
     <div className="flex flex-col gap-4">
@@ -56,7 +58,12 @@ export default async function CityExplorerPage({
           </div>
         }
       />
-      <CityExplorer initialFeatureId={initialFeatureId} features={features} />
+      <CityExplorer
+        initialFeatureId={initialFeatureId}
+        features={features}
+        issues={issues}
+        evidence={evidence}
+      />
     </div>
   );
 }

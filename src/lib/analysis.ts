@@ -1,11 +1,10 @@
 import {
-  getEvidence,
-  getIssuesAtLocation,
-  getIssuesForProject,
+  EVIDENCE,
+  ISSUES,
   getProject,
   getSector,
 } from "@/data";
-import type { InvestigationReport, Project } from "@/types/citytrace";
+import type { Evidence, InvestigationReport, Issue, Project } from "@/types/citytrace";
 import {
   DEMO_NOW,
   DEMO_NOW_LABEL,
@@ -26,9 +25,9 @@ import { formatBdt, formatDate, formatPercent } from "@/utils/formatters";
 
 export interface ProjectAnalysisContext {
   project: Project;
-  issuesAtLocation: ReturnType<typeof getIssuesAtLocation>;
-  linkedIssues: ReturnType<typeof getIssuesForProject>;
-  evidence: ReturnType<typeof getEvidence>;
+  issuesAtLocation: Issue[];
+  linkedIssues: Issue[];
+  evidence: Evidence[];
   sectorName: string;
   overdueDays: number;
   reportedPercent: number;
@@ -45,13 +44,33 @@ export interface ProjectAnalysisContext {
   hasRecurrence: boolean;
 }
 
-export function buildContext(projectId: string): ProjectAnalysisContext | null {
+export function buildContext(
+  projectId: string,
+  issues: Issue[] = ISSUES,
+  evidenceItems: Evidence[] = EVIDENCE
+): ProjectAnalysisContext | null {
   const project = getProject(projectId);
   if (!project) return null;
 
-  const issuesAtLocation = getIssuesAtLocation(project.locationKey);
-  const linkedIssues = getIssuesForProject(project.id);
-  const evidence = getEvidence(project.evidenceIds);
+  const issuesAtLocation = issues
+    .filter((issue) => issue.locationKey === project.locationKey)
+    .sort((a, b) => a.reportedAt.localeCompare(b.reportedAt));
+
+  const linkedMap = new Map<string, Issue>();
+  for (const issue of issues) {
+    if (issue.projectId === project.id || issue.locationKey === project.locationKey) {
+      linkedMap.set(issue.id, issue);
+    }
+  }
+  const linkedIssues = [...linkedMap.values()];
+
+  const evidenceLookup = new Map<string, Evidence>(
+    evidenceItems.map((item) => [item.id, item])
+  );
+  const evidence = project.evidenceIds
+    .map((id) => evidenceLookup.get(id))
+    .filter((item): item is Evidence => item !== undefined);
+
   const sector = getSector(project.sectorId);
 
   const reportedPercent =
@@ -140,8 +159,12 @@ function computeConfidence(ctx: ProjectAnalysisContext): number {
 }
 
 /** Builds a complete, evidence-bound report from the stored record alone. */
-export function analyzeProject(projectId: string): InvestigationReport | null {
-  const ctx = buildContext(projectId);
+export function analyzeProject(
+  projectId: string,
+  issues: Issue[] = ISSUES,
+  evidenceItems: Evidence[] = EVIDENCE
+): InvestigationReport | null {
+  const ctx = buildContext(projectId, issues, evidenceItems);
   if (!ctx) return null;
 
   const { project } = ctx;
@@ -385,8 +408,12 @@ export function analyzeProject(projectId: string): InvestigationReport | null {
 }
 
 /** Compact prompt context for Gemini — only fields the analyst may cite. */
-export function buildPromptContext(projectId: string) {
-  const ctx = buildContext(projectId);
+export function buildPromptContext(
+  projectId: string,
+  issues: Issue[] = ISSUES,
+  evidenceItems: Evidence[] = EVIDENCE
+) {
+  const ctx = buildContext(projectId, issues, evidenceItems);
   if (!ctx) return null;
 
   return {

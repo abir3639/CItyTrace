@@ -35,7 +35,7 @@ import {
   periodStart,
   type PeriodKey,
 } from "@/lib/dashboard";
-import { listIssues } from "@/lib/issue-store";
+import { listAllEvidence, listIssues } from "@/lib/issue-store";
 import {
   getActivityFeed,
   getBudgetTotals,
@@ -144,7 +144,7 @@ export default async function OverviewPage({
   ).length;
 
   const budgets = getBudgetTotals(scopedProjects);
-  const evidence = getEvidenceCoverage(scopedIssues);
+  const evidence = getEvidenceCoverage(scopedIssues, listAllEvidence());
   const categories = getCategoryStats(scopedIssues);
   const sectors = getSectorStats(scopedIssues);
   const trend = buildTrend(windowedIssues, periodStart(period));
@@ -194,6 +194,63 @@ export default async function OverviewPage({
           </div>
         }
       />
+
+      {/* Flagship demo walkthrough strip */}
+      <Panel glow className="flex flex-col gap-2.5 p-3.5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-3.5 w-3.5 text-cyan-400" />
+            <p className="font-mono text-[10px] font-semibold tracking-[0.14em] text-cyan-300 uppercase">
+              Flagship Walkthrough · Begum Rokeya Sarani Link Road
+            </p>
+          </div>
+          <span className="font-mono text-[10px] text-slate-400">
+            Follow one road across all modules
+          </span>
+        </div>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
+          {[
+            {
+              step: "01",
+              label: "3D Road Corridor",
+              sub: "Click the pulsing beacon",
+              href: "/city-explorer?feature=issue:ISS-003",
+            },
+            {
+              step: "02",
+              label: "3× Issue History",
+              sub: "Reopened after 2 repairs",
+              href: "/civic-issues/ISS-003",
+            },
+            {
+              step: "03",
+              label: "Project & Money Ledger",
+              sub: "96.9% spent · 35% built",
+              href: "/public-projects/P-R01",
+            },
+            {
+              step: "04",
+              label: "AI Investigation",
+              sub: "Evidence-cited audit trail",
+              href: "/ai-investigation?project=P-R01",
+            },
+          ].map((item) => (
+            <Link
+              key={item.step}
+              href={item.href}
+              className="group flex items-center justify-between gap-2 rounded-lg border border-slate-800 bg-[#08101d] px-3 py-2 transition-colors hover:border-cyan-400/50 hover:bg-[#0c182b]"
+            >
+              <div className="min-w-0">
+                <p className="font-mono text-[10px] font-semibold text-cyan-300">
+                  {item.step} · {item.label}
+                </p>
+                <p className="truncate font-mono text-[10px] text-slate-400">{item.sub}</p>
+              </div>
+              <ArrowRight className="h-3.5 w-3.5 shrink-0 text-slate-500 transition-transform group-hover:translate-x-0.5 group-hover:text-cyan-300" />
+            </Link>
+          ))}
+        </div>
+      </Panel>
 
       {/* Filters */}
       <Panel className="flex flex-col gap-2 p-3.5">
@@ -538,22 +595,30 @@ export default async function OverviewPage({
           description="Per-100k rates keep small and large sectors comparable."
           icon={<MapIcon className="h-3.5 w-3.5" />}
         />
-        <div className="overflow-x-auto">
+        <div
+          tabIndex={0}
+          role="region"
+          aria-label="Sector comparison table"
+          className="ct-scroll overflow-x-auto"
+        >
           <table className="w-full min-w-[760px] border-collapse text-left">
-            <thead>
+            <caption className="sr-only">
+              Sector comparison of open issues, per-100k rates, recurring sites, projects, and reported spend
+            </caption>
+            <thead className="sticky top-0 z-10 bg-[#09121e]">
               <tr className="border-b border-slate-800 font-mono text-[10px] tracking-wider text-slate-400 uppercase">
-                <th className="py-1.5 pr-3 font-semibold">Sector</th>
-                <th className="py-1.5 pr-3 font-semibold">Open issues</th>
-                <th className="py-1.5 pr-3 font-semibold">Per 100k</th>
-                <th className="py-1.5 pr-3 font-semibold">Recurring</th>
-                <th className="py-1.5 pr-3 font-semibold">Projects</th>
-                <th className="py-1.5 pr-3 text-right font-semibold">Reported spend</th>
+                <th scope="col" className="py-1.5 pr-3 font-semibold">Sector</th>
+                <th scope="col" className="py-1.5 pr-3 font-semibold">Open issues</th>
+                <th scope="col" className="py-1.5 pr-3 font-semibold">Per 100k</th>
+                <th scope="col" className="py-1.5 pr-3 font-semibold">Recurring</th>
+                <th scope="col" className="py-1.5 pr-3 font-semibold">Projects</th>
+                <th scope="col" className="py-1.5 pr-3 text-right font-semibold">Reported spend</th>
               </tr>
             </thead>
             <tbody>
               {sectors.map((row) => (
                 <tr key={row.sector.id} className="border-b border-slate-800/60 last:border-0">
-                  <td className="py-2 pr-3">
+                  <th scope="row" className="py-2 pr-3 font-normal">
                     <Link
                       href={buildHref({ sector: row.sector.id })}
                       className="group inline-flex items-center gap-2"
@@ -565,7 +630,7 @@ export default async function OverviewPage({
                         {row.sector.name}
                       </span>
                     </Link>
-                  </td>
+                  </th>
                   <td className="py-2 pr-3">
                     <div className="flex items-center gap-2">
                       <div className="h-1.5 w-20 overflow-hidden rounded-full bg-slate-800">

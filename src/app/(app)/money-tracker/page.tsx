@@ -264,17 +264,25 @@ export default function MoneyTrackerPage() {
             icon={<Coins className="h-3.5 w-3.5" />}
           />
         </div>
-        <div className="ct-scroll overflow-x-auto">
+        <div
+          tabIndex={0}
+          role="region"
+          aria-label="Project financial ledger table"
+          className="ct-scroll overflow-x-auto"
+        >
           <table className="w-full min-w-[1020px] border-collapse text-left">
-            <thead>
-              <tr className="border-b border-slate-800 bg-[#0a1421] font-mono text-[10px] tracking-wider text-slate-400 uppercase">
-                <th className="px-4 py-2 font-semibold">Project</th>
-                <th className="px-3 py-2 font-semibold">Authority</th>
-                <th className="px-3 py-2 text-right font-semibold">Allocated</th>
-                <th className="px-3 py-2 text-right font-semibold">Reported</th>
-                <th className="px-3 py-2 text-right font-semibold">Verified</th>
-                <th className="px-3 py-2 font-semibold">Utilisation</th>
-                <th className="px-3 py-2 font-semibold">Physical</th>
+            <caption className="sr-only">
+              Financial ledger of all ten sanctioned works comparing allocated, reported, and verified spend
+            </caption>
+            <thead className="sticky top-0 z-10 bg-[#0a1421]">
+              <tr className="border-b border-slate-800 font-mono text-[10px] tracking-wider text-slate-400 uppercase">
+                <th scope="col" className="px-4 py-2 font-semibold">Project</th>
+                <th scope="col" className="px-3 py-2 font-semibold">Authority</th>
+                <th scope="col" className="px-3 py-2 text-right font-semibold">Allocated</th>
+                <th scope="col" className="px-3 py-2 text-right font-semibold">Reported</th>
+                <th scope="col" className="px-3 py-2 text-right font-semibold">Verified</th>
+                <th scope="col" className="px-3 py-2 font-semibold">Utilisation</th>
+                <th scope="col" className="px-3 py-2 font-semibold">Physical</th>
               </tr>
             </thead>
             <tbody>
@@ -292,7 +300,7 @@ export default function MoneyTrackerPage() {
                     key={project.id}
                     className="border-b border-slate-800/60 last:border-0 hover:bg-slate-800/30"
                   >
-                    <td className="px-4 py-2.5 align-top">
+                    <th scope="row" className="px-4 py-2.5 align-top font-normal">
                       <Link
                         href={`/public-projects/${project.id}`}
                         className="font-mono text-[10px] font-semibold text-cyan-300 hover:text-cyan-200"
@@ -306,7 +314,7 @@ export default function MoneyTrackerPage() {
                         {sector?.code ?? project.sectorId} · {relatedIssues.length} linked issues
                         {overdue > 0 ? ` · ${overdue}d overdue` : ""}
                       </p>
-                    </td>
+                    </th>
                     <td className="max-w-[14rem] px-3 py-2.5 align-top font-mono text-[10px] leading-snug text-slate-400">
                       {project.authority}
                     </td>

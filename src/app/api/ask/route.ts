@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { GoogleGenAI } from "@google/genai";
 import { answerQuestion, buildAskDigest, citationsForRefs, type AskAnswer } from "@/lib/ask";
-import { listIssues } from "@/lib/issue-store";
+import { listAllEvidence, listIssues } from "@/lib/issue-store";
 
 /**
  * Civic Q&A endpoint.
@@ -49,7 +49,8 @@ export async function POST(request: Request) {
   }
 
   const issues = listIssues();
-  const baseline = answerQuestion(question, issues);
+  const allEvidence = listAllEvidence();
+  const baseline = answerQuestion(question, issues, allEvidence);
 
   const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
   if (!apiKey) {
@@ -80,7 +81,7 @@ export async function POST(request: Request) {
       return NextResponse.json(baseline);
     }
 
-    const citations = citationsForRefs(parsed.recordRefs);
+    const citations = citationsForRefs(parsed.recordRefs, issues);
     const answer: AskAnswer = {
       question,
       answer: parsed.answer.trim(),

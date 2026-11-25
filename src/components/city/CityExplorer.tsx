@@ -11,6 +11,7 @@ import {
   Play,
   RotateCcw,
   ShieldAlert,
+  Sparkles,
   Wrench,
 } from "lucide-react";
 import CityScene from "./CityScene";
@@ -20,9 +21,6 @@ import { Badge } from "@/components/ui/Badge";
 import { EmptyState, ProgressBar, SpendBar } from "@/components/ui/Data";
 import {
   SECTORS,
-  getEvidence,
-  getIssue,
-  getIssuesAtLocation,
   getProject,
   getSector,
 } from "@/data";
@@ -30,7 +28,10 @@ import {
   CATEGORY_LABELS,
   ISSUE_STATUS_LABELS,
   PROJECT_STATUS_LABELS,
+  type Evidence,
+  type Issue,
   type MapFeature,
+  type MapPosition,
 } from "@/types/citytrace";
 import {
   TONES,
@@ -67,20 +68,62 @@ function matchesFilter(feature: MapFeature, filter: FeatureFilter): boolean {
   }
 }
 
+const QUICK_TARGETS: {
+  label: string;
+  sub: string;
+  preferredIds: string[];
+  tone: "danger" | "warn" | "ok";
+}[] = [
+  {
+    label: "Begum Rokeya Link Road",
+    sub: "3× repaired",
+    preferredIds: ["issue:ISS-003", "project:P-R01"],
+    tone: "danger",
+  },
+  {
+    label: "West Canal Culvert",
+    sub: "Delayed",
+    preferredIds: ["project:P-D02", "issue:ISS-005"],
+    tone: "warn",
+  },
+  {
+    label: "Civic Blvd Smart LED",
+    sub: "Verified",
+    preferredIds: ["project:P-L03"],
+    tone: "ok",
+  },
+];
+
 export default function CityExplorer({
   initialFeatureId = null,
   features,
+  issues,
+  evidence,
 }: {
   /** Deep link from another module, e.g. `?feature=issue:ISS-003`. */
   initialFeatureId?: string | null;
   /** Map features built server-side so citizen reports appear immediately. */
   features: MapFeature[];
+  /** Live issues including citizen submissions. */
+  issues: Issue[];
+  /** Live evidence including citizen-uploaded photos. */
+  evidence: Evidence[];
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(initialFeatureId);
   const [autoRotate, setAutoRotate] = useState(true);
   const [resetSignal, setResetSignal] = useState(0);
   const [filter, setFilter] = useState<FeatureFilter>("all");
   const [sectorFilter, setSectorFilter] = useState<string | null>(null);
+
+  const issuesMap = useMemo(
+    () => new Map<string, Issue>(issues.map((issue) => [issue.id, issue])),
+    [issues]
+  );
+
+  const evidenceMap = useMemo(
+    () => new Map<string, Evidence>(evidence.map((item) => [item.id, item])),
+    [evidence]
+  );
 
   const visibleFeatures = useMemo(
     () =>
@@ -92,6 +135,11 @@ export default function CityExplorer({
     [features, filter, sectorFilter]
   );
 
+  const sectorFocus: MapPosition | null = useMemo(
+    () => (sectorFilter ? (getSector(sectorFilter)?.center ?? null) : null),
+    [sectorFilter]
+  );
+
   const selected =
     visibleFeatures.find((feature) => feature.id === selectedId) ?? null;
 
@@ -99,6 +147,21 @@ export default function CityExplorer({
     setSelectedId(id);
     if (id) setAutoRotate(false);
   }, []);
+
+  const focusQuickTarget = useCallback(
+    (preferredIds: string[]) => {
+      const match =
+        visibleFeatures.find((feature) => preferredIds.includes(feature.id)) ??
+        features.find((feature) => preferredIds.includes(feature.id));
+      if (!match) return;
+      if (!visibleFeatures.some((feature) => feature.id === match.id)) {
+        setFilter("all");
+        setSectorFilter(null);
+      }
+      handleSelect(match.id);
+    },
+    [features, visibleFeatures, handleSelect]
+  );
 
   return (
     <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
@@ -174,6 +237,33 @@ export default function CityExplorer({
               ))}
             </div>
 
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="font-mono text-[9px] tracking-wider text-slate-500 uppercase">
+                Quick focus
+              </span>
+              {QUICK_TARGETS.map((target) => {
+                const isTargetSelected = Boolean(
+                  selectedId && target.preferredIds.includes(selectedId)
+                );
+                return (
+                  <button
+                    key={target.label}
+                    type="button"
+                    onClick={() => focusQuickTarget(target.preferredIds)}
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 font-mono text-[10px] transition-colors cursor-pointer ${
+                      isTargetSelected
+                        ? "border-cyan-400/60 bg-cyan-500/15 text-cyan-100"
+                        : "border-slate-700/90 bg-slate-900/60 text-slate-300 hover:border-cyan-500/40 hover:text-cyan-200"
+                    }`}
+                  >
+                    <span className={`h-1.5 w-1.5 rounded-full ${TONES[target.tone].dot}`} />
+                    <span>{target.label}</span>
+                    <span className="text-slate-500">· {target.sub}</span>
+                  </button>
+                );
+              })}
+            </div>
+
             <div className="flex items-center gap-2">
               <button
                 type="button"
@@ -206,6 +296,7 @@ export default function CityExplorer({
           onSelect={handleSelect}
           autoRotate={autoRotate}
           resetSignal={resetSignal}
+          sectorFocus={sectorFocus}
         />
       </div>
 
@@ -214,7 +305,7 @@ export default function CityExplorer({
           <Panel className="flex h-full flex-col gap-3 p-4">
             <PanelHeader
               title="Record Inspector"
-              description="Select any beacon in the model to open its civic record."
+              description="Select any beacon or road corridor in the model to open its civic record."
               icon={<MapPin className="h-3.5 w-3.5" />}
             />
             <EmptyState
@@ -244,9 +335,17 @@ export default function CityExplorer({
             </p>
           </Panel>
         ) : selected.kind === "issue" ? (
-          <IssueInspector issueId={selected.refId} />
+          <IssueInspector
+            issueId={selected.refId}
+            issues={issues}
+            issuesMap={issuesMap}
+            evidenceMap={evidenceMap}
+          />
         ) : (
-          <ProjectInspector projectId={selected.refId} />
+          <ProjectInspector
+            projectId={selected.refId}
+            evidenceMap={evidenceMap}
+          />
         )}
       </div>
     </div>
@@ -255,14 +354,28 @@ export default function CityExplorer({
 
 /* ------------------------------------------------------------------ */
 
-function IssueInspector({ issueId }: { issueId: string }) {
-  const issue = getIssue(issueId);
+function IssueInspector({
+  issueId,
+  issues,
+  issuesMap,
+  evidenceMap,
+}: {
+  issueId: string;
+  issues: Issue[];
+  issuesMap: Map<string, Issue>;
+  evidenceMap: Map<string, Evidence>;
+}) {
+  const issue = issuesMap.get(issueId);
   if (!issue) return null;
 
   const sector = getSector(issue.sectorId);
   const project = issue.projectId ? getProject(issue.projectId) : undefined;
-  const evidence = getEvidence(issue.evidenceIds);
-  const atLocation = getIssuesAtLocation(issue.locationKey);
+  const evidence = issue.evidenceIds
+    .map((id) => evidenceMap.get(id))
+    .filter((item): item is Evidence => item !== undefined);
+  const atLocation = issues
+    .filter((item) => item.locationKey === issue.locationKey)
+    .sort((a, b) => a.reportedAt.localeCompare(b.reportedAt));
   const others = atLocation.filter((item) => item.id !== issue.id);
   const tone = issueStatusTone(issue.status);
 
@@ -362,22 +475,40 @@ function IssueInspector({ issueId }: { issueId: string }) {
         </div>
       </div>
 
-      <Link
-        href={`/civic-issues/${issue.id}`}
-        className="mt-auto inline-flex items-center justify-center gap-1.5 rounded-lg border border-cyan-400/50 bg-cyan-500/15 px-3 py-2 font-mono text-[11px] font-semibold text-cyan-200 transition-colors hover:bg-cyan-500/25"
-      >
-        Open full issue history <ArrowRight className="h-3 w-3" />
-      </Link>
+      <div className="mt-auto flex flex-col gap-2">
+        <Link
+          href={`/civic-issues/${issue.id}`}
+          className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-cyan-400/50 bg-cyan-500/15 px-3 py-2 font-mono text-[11px] font-semibold text-cyan-200 transition-colors hover:bg-cyan-500/25"
+        >
+          Open full issue history <ArrowRight className="h-3 w-3" />
+        </Link>
+        {project ? (
+          <Link
+            href={`/ai-investigation?project=${project.id}`}
+            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-cyan-300/50 bg-gradient-to-r from-cyan-500 to-sky-500 px-3 py-2 font-mono text-[11px] font-bold text-slate-950 transition-all hover:brightness-110"
+          >
+            <Sparkles className="h-3 w-3" /> Investigate with AI
+          </Link>
+        ) : null}
+      </div>
     </Panel>
   );
 }
 
-function ProjectInspector({ projectId }: { projectId: string }) {
+function ProjectInspector({
+  projectId,
+  evidenceMap,
+}: {
+  projectId: string;
+  evidenceMap: Map<string, Evidence>;
+}) {
   const project = getProject(projectId);
   if (!project) return null;
 
   const sector = getSector(project.sectorId);
-  const evidence = getEvidence(project.evidenceIds);
+  const evidence = project.evidenceIds
+    .map((id) => evidenceMap.get(id))
+    .filter((item): item is Evidence => item !== undefined);
   const tone = projectStatusTone(project.status);
   const spend = formatPercent(
     (project.reportedExpenditureBdt / project.allocatedBudgetBdt) * 100,
@@ -482,12 +613,20 @@ function ProjectInspector({ projectId }: { projectId: string }) {
         </div>
       </div>
 
-      <Link
-        href={`/public-projects/${project.id}`}
-        className="mt-auto inline-flex items-center justify-center gap-1.5 rounded-lg border border-cyan-400/50 bg-cyan-500/15 px-3 py-2 font-mono text-[11px] font-semibold text-cyan-200 transition-colors hover:bg-cyan-500/25"
-      >
-        Open project ledger <ArrowRight className="h-3 w-3" />
-      </Link>
+      <div className="mt-auto flex flex-col gap-2">
+        <Link
+          href={`/public-projects/${project.id}`}
+          className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-cyan-400/50 bg-cyan-500/15 px-3 py-2 font-mono text-[11px] font-semibold text-cyan-200 transition-colors hover:bg-cyan-500/25"
+        >
+          Open project ledger <ArrowRight className="h-3 w-3" />
+        </Link>
+        <Link
+          href={`/ai-investigation?project=${project.id}`}
+          className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-cyan-300/50 bg-gradient-to-r from-cyan-500 to-sky-500 px-3 py-2 font-mono text-[11px] font-bold text-slate-950 transition-all hover:brightness-110"
+        >
+          <Sparkles className="h-3 w-3" /> Investigate with AI
+        </Link>
+      </div>
     </Panel>
   );
 }

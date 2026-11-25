@@ -1,12 +1,12 @@
 "use client";
 
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { Compass, Layers, MousePointerClick } from "lucide-react";
-import type { MapFeature } from "@/types/citytrace";
+import type { MapFeature, MapPosition } from "@/types/citytrace";
 import { TONES, mapFeatureTone } from "@/utils/formatters";
 
 /* ------------------------------------------------------------------ */
@@ -125,9 +125,63 @@ function StreetlightCorridor() {
   );
 }
 
-function DhakaRoadsAndCanal() {
+interface CorridorDef {
+  id: string;
+  label: string;
+  preferredFeatureIds: string[];
+  position: [number, number, number];
+  size: [number, number];
+  color: string;
+  hoverColor: string;
+}
+
+const CLICKABLE_CORRIDORS: CorridorDef[] = [
+  {
+    id: "begum-rokeya-link-road",
+    label: "Begum Rokeya Sarani Link Road (3× repaired) — click to inspect",
+    preferredFeatureIds: ["issue:ISS-003", "project:P-R01"],
+    position: [-1.8, 0.018, 1.55],
+    size: [4.2, 1.85],
+    color: "#ef4444",
+    hoverColor: "#f87171",
+  },
+  {
+    id: "west-canal-outfall",
+    label: "Western Storm Canal & Culvert (Delayed) — click to inspect",
+    preferredFeatureIds: ["project:P-D02", "issue:ISS-005"],
+    position: [-6.8, 0.018, -3.4],
+    size: [2.2, 4.4],
+    color: "#f59e0b",
+    hoverColor: "#fbbf24",
+  },
+  {
+    id: "east-boulevard-led",
+    label: "East Civic Boulevard Smart LED (Verified) — click to inspect",
+    preferredFeatureIds: ["project:P-L03"],
+    position: [5.8, 0.018, 0.0],
+    size: [1.65, 9.6],
+    color: "#10b981",
+    hoverColor: "#34d399",
+  },
+];
+
+function DhakaRoadsAndCanal({
+  onSelectCorridor,
+  onHoverCorridor,
+}: {
+  onSelectCorridor: (preferredFeatureIds: string[]) => void;
+  onHoverCorridor: (label: string | null) => void;
+}) {
+  const [hoveredCorridor, setHoveredCorridor] = useState<string | null>(null);
   const dashPositionsX = [-9.5, -7.8, -4.4, -2.9, 0.1, 1.8, 3.6, 6.9, 8.8];
   const dashPositionsZ = [-6.4, -4.6, -2.8, -1.0, 2.9, 4.7, 6.5];
+
+  useEffect(() => {
+    document.body.style.cursor = hoveredCorridor ? "pointer" : "auto";
+    return () => {
+      document.body.style.cursor = "auto";
+    };
+  }, [hoveredCorridor]);
 
   return (
     <group>
@@ -204,6 +258,38 @@ function DhakaRoadsAndCanal() {
         <boxGeometry args={[1.95, 0.14, 1.85]} />
         <meshStandardMaterial color="#15263f" />
       </mesh>
+
+      {/* Interactive road & infrastructure corridors */}
+      {CLICKABLE_CORRIDORS.map((corridor) => {
+        const isHovered = hoveredCorridor === corridor.id;
+        return (
+          <mesh
+            key={corridor.id}
+            rotation={[-Math.PI / 2, 0, 0]}
+            position={corridor.position}
+            onClick={(event) => {
+              event.stopPropagation();
+              onSelectCorridor(corridor.preferredFeatureIds);
+            }}
+            onPointerOver={(event) => {
+              event.stopPropagation();
+              setHoveredCorridor(corridor.id);
+              onHoverCorridor(corridor.label);
+            }}
+            onPointerOut={() => {
+              setHoveredCorridor(null);
+              onHoverCorridor(null);
+            }}
+          >
+            <planeGeometry args={corridor.size} />
+            <meshBasicMaterial
+              color={isHovered ? corridor.hoverColor : corridor.color}
+              transparent
+              opacity={isHovered ? 0.34 : 0.14}
+            />
+          </mesh>
+        );
+      })}
     </group>
   );
 }
@@ -358,10 +444,12 @@ function CameraRig({
   autoRotate,
   resetSignal,
   selectedFeature,
+  sectorFocus,
 }: {
   autoRotate: boolean;
   resetSignal: number;
   selectedFeature: MapFeature | null;
+  sectorFocus: MapPosition | null;
 }) {
   const controlsRef = useRef<OrbitControlsImpl | null>(null);
   const { camera } = useThree();
@@ -376,6 +464,14 @@ function CameraRig({
       modeRef.current = "reset";
     }
   }, [resetSignal]);
+
+  useEffect(() => {
+    if (!sectorFocus) return;
+    const [sx, sz] = sectorFocus;
+    targetGoalRef.current.set(sx * 0.6, 0.45, sz * 0.6);
+    cameraGoalRef.current.set(sx * 0.6 + 9.2, 8.8, sz * 0.6 + 10.4);
+    modeRef.current = "focus";
+  }, [sectorFocus]);
 
   useEffect(() => {
     if (!selectedFeature) return;
@@ -447,6 +543,7 @@ interface CitySceneProps {
   onSelect: (id: string | null) => void;
   autoRotate: boolean;
   resetSignal: number;
+  sectorFocus?: MapPosition | null;
 }
 
 export default function CityScene({
@@ -455,13 +552,23 @@ export default function CityScene({
   onSelect,
   autoRotate,
   resetSignal,
+  sectorFocus = null,
 }: CitySceneProps) {
   const markerDomRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [hoveredCorridorLabel, setHoveredCorridorLabel] = useState<string | null>(null);
 
   const selectedFeature = useMemo(
     () => features.find((feature) => feature.id === selectedId) ?? null,
     [features, selectedId]
+  );
+
+  const handleSelectCorridor = useCallback(
+    (preferredFeatureIds: string[]) => {
+      const target = features.find((feature) => preferredFeatureIds.includes(feature.id));
+      if (target) onSelect(target.id);
+    },
+    [features, onSelect]
   );
 
   const activeId = selectedId ?? hoveredId;
@@ -479,7 +586,7 @@ export default function CityScene({
             SECTOR 04 · DHAKA URBAN MODEL
           </p>
           <p className="font-mono text-[10px] text-slate-400">
-            Click a glowing beacon to inspect the record
+            {hoveredCorridorLabel ?? "Click a glowing beacon or road corridor to inspect the record"}
           </p>
         </div>
       </div>
@@ -502,7 +609,10 @@ export default function CityScene({
         <directionalLight position={[10, 16, 8]} intensity={1.15} color="#bae6fd" />
         <directionalLight position={[-9, 8, -10]} intensity={0.45} color="#22d3ee" />
 
-        <DhakaRoadsAndCanal />
+        <DhakaRoadsAndCanal
+          onSelectCorridor={handleSelectCorridor}
+          onHoverCorridor={setHoveredCorridorLabel}
+        />
         {DHAKA_BUILDINGS.map((b) => (
           <MemoBuilding key={b.id} b={b} />
         ))}
@@ -528,6 +638,7 @@ export default function CityScene({
           autoRotate={autoRotate}
           resetSignal={resetSignal}
           selectedFeature={selectedFeature}
+          sectorFocus={sectorFocus}
         />
       </Canvas>
 

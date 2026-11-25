@@ -1,5 +1,5 @@
-import { ISSUES, PROJECTS, SECTORS } from "@/data";
-import type { Issue, IssueCategory, Project, Sector } from "@/types/citytrace";
+import { EVIDENCE as SEED_EVIDENCE, ISSUES, PROJECTS, SECTORS } from "@/data";
+import type { Evidence, Issue, IssueCategory, Project, Sector } from "@/types/citytrace";
 import { CATEGORY_LABELS, ISSUE_CATEGORIES, ISSUE_STATUS_LABELS } from "@/types/citytrace";
 import {
   clusterByLocation,
@@ -60,7 +60,7 @@ export function sectorCitation(sector: Sector): AskCitation {
 }
 
 /** Resolves AI-supplied record ids into real links, dropping anything unknown. */
-export function citationsForRefs(refs: unknown): AskCitation[] {
+export function citationsForRefs(refs: unknown, issues: Issue[] = ISSUES): AskCitation[] {
   if (!Array.isArray(refs)) return [];
   const citations: AskCitation[] = [];
   for (const raw of refs) {
@@ -70,7 +70,7 @@ export function citationsForRefs(refs: unknown): AskCitation[] {
       citations.push(projectCitation(project));
       continue;
     }
-    const issue = ISSUES.find((item) => item.id === raw);
+    const issue = issues.find((item) => item.id === raw);
     if (issue) citations.push(issueCitation(issue));
   }
   return citations.slice(0, 6);
@@ -275,8 +275,12 @@ function answerMoney(question: string, issues: Issue[], category?: IssueCategory
   };
 }
 
-function answerEvidence(question: string, issues: Issue[]): AskAnswer {
-  const coverage = getEvidenceCoverage(issues);
+function answerEvidence(
+  question: string,
+  issues: Issue[],
+  evidenceItems: Evidence[] = SEED_EVIDENCE
+): AskAnswer {
+  const coverage = getEvidenceCoverage(issues, evidenceItems);
   const missing = coverage.projectsMissingVerifiedSpend;
 
   return {
@@ -362,13 +366,17 @@ const EVIDENCE = /(missing|evidence|verif|proof|document|paperwork)/;
 const RANKING = /(most|worst|highest|top|neighbourhood|neighborhood)/;
 const PROJECTS_WORD = /(project|work|scheme|contract)/;
 
-export function answerQuestion(question: string, issues: Issue[] = ISSUES): AskAnswer {
+export function answerQuestion(
+  question: string,
+  issues: Issue[] = ISSUES,
+  evidenceItems: Evidence[] = SEED_EVIDENCE
+): AskAnswer {
   const q = question.toLowerCase().trim();
   const sector = detectSector(q);
   const category = detectCategory(q);
 
   if (RECURRENCE.test(q)) return answerRecurrence(question, issues, sector);
-  if (EVIDENCE.test(q)) return answerEvidence(question, issues);
+  if (EVIDENCE.test(q)) return answerEvidence(question, issues, evidenceItems);
   if (DELAY.test(q)) return answerDelay(question, sector);
   if (MONEY.test(q)) return answerMoney(question, issues, category);
   if (RANKING.test(q) && /(issue|problem)/.test(q)) return answerSectors(question, issues);
