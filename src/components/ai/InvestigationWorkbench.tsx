@@ -20,6 +20,7 @@ import {
 import { Panel, PanelHeader } from "@/components/ui/Panel";
 import { Badge } from "@/components/ui/Badge";
 import { KeyValue, ProgressBar, SpendBar } from "@/components/ui/Data";
+import { PrintDossierButton } from "@/components/ui/ExportActions";
 import { PROJECTS, getSector } from "@/data";
 import { PROJECT_STATUS_LABELS } from "@/types/citytrace";
 import type { InvestigationReport } from "@/types/citytrace";
@@ -590,7 +591,7 @@ export default function InvestigationWorkbench({
                 </ol>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2.5 pt-1">
+              <div className="print-hidden flex flex-wrap items-center gap-2.5 pt-1">
                 <button
                   type="button"
                   onClick={copySummary}
@@ -608,6 +609,7 @@ export default function InvestigationWorkbench({
                     </>
                   )}
                 </button>
+                <PrintDossierButton label="Save dossier PDF" />
                 <Link
                   href={`/public-projects/${selected.id}`}
                   className="inline-flex items-center gap-1.5 rounded-full bg-[#007AFF] px-4 py-2 text-[12.5px] font-semibold text-white transition-all hover:bg-[#0066D6]"

@@ -18,6 +18,8 @@ import { Panel, PanelHeader } from "@/components/ui/Panel";
 import { Badge } from "@/components/ui/Badge";
 import { KeyValue, ProgressBar, SpendBar } from "@/components/ui/Data";
 import { EvidenceGallery } from "@/components/evidence/EvidenceTile";
+import EvidenceCompareSlider from "@/components/evidence/EvidenceCompareSlider";
+import { PrintDossierButton } from "@/components/ui/ExportActions";
 import { ProjectSpendChart } from "@/components/money/MoneyCharts";
 import { getEvidence, getSector, projectsById } from "@/data";
 import { listIssues } from "@/lib/issue-store";
@@ -85,7 +87,8 @@ export default async function ProjectDetailPage({
           <ArrowLeft className="h-3.5 w-3.5" />
           Public Projects
         </Link>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="print-hidden flex flex-wrap items-center gap-2">
+          <PrintDossierButton />
           <Link
             href={`/city-explorer?feature=project:${project.id}`}
             className="inline-flex items-center gap-1.5 rounded-full border border-black/[0.08] bg-white px-3.5 py-1.5 text-[12.5px] font-medium text-[#1D1D1F] shadow-sm hover:bg-[#F9FAFB]"
@@ -260,7 +263,8 @@ export default async function ProjectDetailPage({
               title={`Evidence (${evidence.length})`}
               description="Documents, measurements, and site photographs attached to this project."
             />
-            <div className="mt-3">
+            <div className="mt-3 flex flex-col gap-4">
+              {evidence.length >= 2 ? <EvidenceCompareSlider items={evidence} /> : null}
               <EvidenceGallery items={evidence} />
             </div>
           </Panel>

@@ -3,12 +3,13 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { AlertCircle, Camera, CheckCircle2, Loader2, Send, X } from "lucide-react";
+import { AlertCircle, Camera, CheckCircle2, Loader2, MapPin, Send, X } from "lucide-react";
 import { SECTORS } from "@/data";
 import {
   CATEGORY_LABELS,
   ISSUE_CATEGORIES,
   type IssueCategory,
+  type MapPosition,
 } from "@/types/citytrace";
 
 const MAX_FILE_BYTES = 1_500_000;
@@ -54,15 +55,26 @@ interface FieldErrors {
   photo?: string;
 }
 
-export default function ReportIssueForm() {
+export default function ReportIssueForm({
+  initialSectorId,
+  initialLocation,
+  initialCoordinates,
+}: {
+  initialSectorId?: string;
+  initialLocation?: string;
+  initialCoordinates?: MapPosition;
+} = {}) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState<IssueCategory>("road");
-  const [sectorId, setSectorId] = useState(SECTORS[0].id);
-  const [location, setLocation] = useState("");
+  const [sectorId, setSectorId] = useState(initialSectorId ?? SECTORS[0].id);
+  const [location, setLocation] = useState(initialLocation ?? "");
   const [locationKey, setLocationKey] = useState<string | undefined>(undefined);
+  const [pinnedCoordinates, setPinnedCoordinates] = useState<MapPosition | undefined>(
+    initialCoordinates
+  );
   const [description, setDescription] = useState("");
   const [photo, setPhoto] = useState<{ name: string; dataUrl: string } | null>(null);
 
@@ -113,6 +125,7 @@ export default function ReportIssueForm() {
           sectorId,
           location,
           locationKey,
+          coordinates: pinnedCoordinates,
           description,
           photoDataUrl: photo?.dataUrl,
         }),
@@ -143,6 +156,22 @@ export default function ReportIssueForm() {
 
   return (
     <form onSubmit={submit} className="flex flex-col gap-5">
+      {pinnedCoordinates ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-[14px] border border-[#007AFF]/20 bg-[#007AFF]/[0.07] px-3.5 py-2.5">
+          <span className="inline-flex items-center gap-2 text-[12.5px] font-medium text-[#0055CC] tabular-nums">
+            <MapPin className="h-3.5 w-3.5 text-[#007AFF]" />
+            Pinned from City Explorer ({pinnedCoordinates[0]}, {pinnedCoordinates[1]})
+          </span>
+          <button
+            type="button"
+            onClick={() => setPinnedCoordinates(undefined)}
+            className="inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 text-[11px] font-medium text-[#6E6E73] shadow-xs hover:text-[#1D1D1F] cursor-pointer"
+          >
+            <X className="h-3 w-3" /> Clear pin
+          </button>
+        </div>
+      ) : null}
+
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5 sm:col-span-2">
           <label htmlFor="issue-title" className="text-[12.5px] font-medium text-[#1D1D1F]">

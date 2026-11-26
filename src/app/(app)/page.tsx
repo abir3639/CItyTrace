@@ -158,6 +158,7 @@ export default async function OverviewPage({
   ];
 
   const categoryRows = categories.map((row) => ({
+    categoryId: row.category,
     category: CATEGORY_LABELS[row.category],
     open: row.openIssues,
     resolved: row.issueCount - row.openIssues,

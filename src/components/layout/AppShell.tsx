@@ -55,7 +55,7 @@ export default function AppShell({
   return (
     <div className="relative min-h-screen bg-[#F5F5F7]">
       {/* Soft ambient colour washes behind the floating Liquid Glass sidebar */}
-      <div aria-hidden="true" className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
+      <div aria-hidden="true" className="print-hidden pointer-events-none fixed inset-0 z-0 overflow-hidden">
         <div className="absolute -top-24 -left-24 h-[380px] w-[380px] rounded-full bg-[#007AFF]/[0.13] blur-[76px]" />
         <div className="absolute top-[38%] -left-28 h-[320px] w-[320px] rounded-full bg-[#34C759]/[0.09] blur-[76px]" />
         <div className="absolute -bottom-24 -left-20 h-[340px] w-[340px] rounded-full bg-[#FF9500]/[0.10] blur-[76px]" />
@@ -86,7 +86,7 @@ export default function AppShell({
       />
 
       <div
-        className={`relative z-10 flex min-h-screen flex-col transition-[padding] duration-250 ease-[cubic-bezier(0.2,0.8,0.2,1)] ${
+        className={`relative z-10 flex min-h-screen flex-col transition-[padding] duration-250 ease-[cubic-bezier(0.2,0.8,0.2,1)] print:pl-0 ${
           collapsed ? "lg:pl-[90px]" : "lg:pl-[260px]"
         }`}
       >

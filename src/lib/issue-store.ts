@@ -241,6 +241,7 @@ export interface CreateIssueInput {
   location: string;
   sectorId: string;
   locationKey?: string;
+  coordinates?: MapPosition;
   photoDataUrl?: string;
 }
 
@@ -269,6 +270,13 @@ export function createIssue(input: CreateIssueInput): Issue {
     });
   }
 
+  const resolvedCoordinates: MapPosition = input.coordinates
+    ? [
+        Number(input.coordinates[0].toFixed(2)),
+        Number(input.coordinates[1].toFixed(2)),
+      ]
+    : positionFor(input.sectorId, id, match?.baseCoordinates);
+
   const issue: Issue = {
     id,
     code,
@@ -278,7 +286,7 @@ export function createIssue(input: CreateIssueInput): Issue {
     sectorId: input.sectorId,
     location: input.location,
     locationKey: match?.locationKey ?? (slugifyLocation(input.location) || slugifyLocation(id)),
-    coordinates: positionFor(input.sectorId, id, match?.baseCoordinates),
+    coordinates: resolvedCoordinates,
     status: "reported",
     severity: "moderate",
     reportedAt: today,
@@ -303,6 +311,38 @@ export function createIssue(input: CreateIssueInput): Issue {
   writeStore(store);
 
   return issue;
+}
+
+export function confirmIssue(id: string, note?: string): Issue | null {
+  const base = findIssue(id);
+  if (!base) return null;
+
+  const today = DEMO_NOW;
+  const event: IssueEvent = {
+    id: `${id}-H${base.history.length + 1}`,
+    at: today,
+    status: base.status,
+    note: note?.trim() || "Citizen confirmed this issue is still present on site.",
+    actor: "citizen",
+  };
+
+  const updated: Issue = {
+    ...base,
+    reportCount: base.reportCount + 1,
+    updatedAt: today,
+    history: [...base.history, event],
+  };
+
+  const store = readStore();
+  const createdIndex = store.created.findIndex((issue) => issue.id === id);
+  if (createdIndex >= 0) {
+    store.created[createdIndex] = updated;
+  } else {
+    store.overrides[id] = updated;
+  }
+  writeStore(store);
+
+  return updated;
 }
 
 export function changeIssueStatus(

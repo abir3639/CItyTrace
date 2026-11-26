@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { changeIssueStatus, findIssue } from "@/lib/issue-store";
+import { changeIssueStatus, confirmIssue, findIssue } from "@/lib/issue-store";
 import { ISSUE_STATUS_ORDER, type IssueStatus } from "@/types/citytrace";
 
 export async function PATCH(
@@ -12,11 +12,21 @@ export async function PATCH(
     return NextResponse.json({ error: `Unknown issue "${id}".` }, { status: 404 });
   }
 
-  let body: { status?: unknown; note?: unknown };
+  let body: { action?: unknown; status?: unknown; note?: unknown };
   try {
-    body = (await request.json()) as { status?: unknown; note?: unknown };
+    body = (await request.json()) as { action?: unknown; status?: unknown; note?: unknown };
   } catch {
     return NextResponse.json({ error: "Invalid JSON request body." }, { status: 400 });
+  }
+
+  const note = typeof body.note === "string" ? body.note.slice(0, 500) : "";
+
+  if (body.action === "confirm") {
+    const updated = confirmIssue(id, note);
+    if (!updated) {
+      return NextResponse.json({ error: "Could not confirm the issue." }, { status: 500 });
+    }
+    return NextResponse.json({ issue: updated });
   }
 
   const status = typeof body.status === "string" ? (body.status as IssueStatus) : undefined;
@@ -27,7 +37,6 @@ export async function PATCH(
     );
   }
 
-  const note = typeof body.note === "string" ? body.note.slice(0, 500) : "";
   const updated = changeIssueStatus(id, status, note);
 
   if (!updated) {

@@ -1,10 +1,15 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight, Coins, FileWarning, Wallet } from "lucide-react";
+import { ArrowRight, Building2, Coins, FileWarning, Wallet } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Panel, PanelHeader } from "@/components/ui/Panel";
 import { Badge } from "@/components/ui/Badge";
 import { KeyValue, ProgressBar, SpendBar } from "@/components/ui/Data";
+import {
+  LedgerCsvExportButton,
+  PrintDossierButton,
+  type LedgerExportRow,
+} from "@/components/ui/ExportActions";
 import {
   CategoryBudgetChart,
   OverdueDaysChart,
@@ -19,6 +24,7 @@ import {
   type ProjectStatus,
 } from "@/types/citytrace";
 import {
+  getAuthorityScorecards,
   getBlockedProjects,
   getBudgetTotals,
   getCategoryStats,
@@ -49,6 +55,7 @@ export default function MoneyTrackerPage() {
   const shortCode = (code: string) => code.replace(/^CT-DH-/, "");
 
   const spendRows = PROJECTS.map((project) => ({
+    projectId: project.id,
     code: shortCode(project.code),
     name: project.name,
     allocated: project.allocatedBudgetBdt,
@@ -64,14 +71,33 @@ export default function MoneyTrackerPage() {
 
   const statusOrder: ProjectStatus[] = ["completed", "active", "planned", "delayed", "stalled"];
   const statusRows = statusOrder.map((status) => ({
+    statusKey: status,
     status: PROJECT_STATUS_LABELS[status],
     count: PROJECTS.filter((project) => project.status === status).length,
   }));
 
   const overdueRows = getBlockedProjects().map((project) => ({
+    projectId: project.id,
     code: shortCode(project.code),
     name: project.name,
     days: getProjectOverdueDays(project),
+  }));
+
+  const scorecards = getAuthorityScorecards(issues);
+
+  const ledgerExportRows: LedgerExportRow[] = PROJECTS.map((project) => ({
+    code: project.code,
+    name: project.name,
+    sector: getSector(project.sectorId)?.code ?? project.sectorId,
+    category: CATEGORY_LABELS[project.category],
+    authority: project.authority,
+    status: PROJECT_STATUS_LABELS[project.status],
+    allocatedBdt: project.allocatedBudgetBdt,
+    reportedBdt: project.reportedExpenditureBdt,
+    verifiedBdt: project.verifiedExpenditureBdt ?? null,
+    verifiedProgressPercent: project.verifiedProgressPercent,
+    overdueDays: getProjectOverdueDays(project),
+    linkedIssuesCount: issues.filter((issue) => issue.projectId === project.id).length,
   }));
 
   return (
@@ -81,12 +107,15 @@ export default function MoneyTrackerPage() {
         title="Where Public Money Goes"
         description="Sanctioned allocation, reported expenditure, and independently verified spend are always separated — missing verification is never hidden."
         actions={
-          <Link
-            href="/public-projects"
-            className="inline-flex items-center gap-1.5 rounded-full border border-black/[0.08] bg-white px-4 py-2 text-[13px] font-semibold text-[#007AFF] shadow-sm hover:bg-[#F9FAFB]"
-          >
-            Project list <ArrowRight className="h-3.5 w-3.5" />
-          </Link>
+          <div className="print-hidden flex flex-wrap items-center gap-2">
+            <PrintDossierButton />
+            <Link
+              href="/public-projects"
+              className="inline-flex items-center gap-1.5 rounded-full border border-black/[0.08] bg-white px-4 py-2 text-[13px] font-semibold text-[#007AFF] shadow-sm hover:bg-[#F9FAFB]"
+            >
+              Project list <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
         }
       />
 
@@ -264,6 +293,7 @@ export default function MoneyTrackerPage() {
             title="Project Ledger"
             description="Allocation, reported spend, and verified spend for every sanctioned work."
             icon={<Coins className="h-4 w-4" />}
+            actions={<LedgerCsvExportButton rows={ledgerExportRows} />}
           />
         </div>
         <div
@@ -363,6 +393,90 @@ export default function MoneyTrackerPage() {
               })}
             </tbody>
           </table>
+        </div>
+      </Panel>
+
+      <Panel className="p-5">
+        <PanelHeader
+          title="Executing Agency Scorecard"
+          description="Delivery timeliness, verification rate, and recurring problem pressure grouped by authority."
+          icon={<Building2 className="h-4 w-4" />}
+        />
+
+        <div className="mt-4 grid grid-cols-1 gap-3.5 md:grid-cols-2">
+          {scorecards.map((card) => {
+            const gradeTone =
+              card.grade === "A"
+                ? "ok"
+                : card.grade === "B"
+                  ? "info"
+                  : card.grade === "C"
+                    ? "warn"
+                    : "danger";
+            return (
+              <div
+                key={card.authority}
+                className="flex flex-col gap-3 rounded-[16px] border border-black/[0.06] bg-[#F9FAFB] p-4"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-[13.5px] font-semibold leading-snug text-[#1D1D1F]">
+                      {card.authority}
+                    </p>
+                    <p className="mt-0.5 text-[12px] text-[#6E6E73] tabular-nums">
+                      {card.projectCount} work{card.projectCount === 1 ? "" : "s"} ·{" "}
+                      {formatBdtCompact(card.allocatedBdt)} allocated
+                    </p>
+                  </div>
+                  <Badge tone={gradeTone}>Grade {card.grade}</Badge>
+                </div>
+
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between text-[12px] tabular-nums">
+                    <span className="text-[#6E6E73]">Verified spend coverage</span>
+                    <span className="font-semibold text-[#1D1D1F]">
+                      {formatPercent(card.verifiedSpendSharePercent, 0)}
+                    </span>
+                  </div>
+                  <ProgressBar
+                    value={card.verifiedSpendSharePercent}
+                    tone={gradeTone}
+                    className="h-1.5"
+                    label={`${card.verifiedSpendSharePercent.toFixed(0)} percent verified spend`}
+                  />
+                </div>
+
+                <dl className="grid grid-cols-3 gap-2 border-t border-black/[0.05] pt-2.5 text-[11.5px] tabular-nums">
+                  <div>
+                    <dt className="text-[#6E6E73]">On-schedule</dt>
+                    <dd className="font-semibold text-[#1D1D1F]">
+                      {formatPercent(card.onTimeRatePercent, 0)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-[#6E6E73]">Avg overdue</dt>
+                    <dd
+                      className={`font-semibold ${
+                        card.avgOverdueDays > 0 ? "text-[#B25000]" : "text-[#1A7F37]"
+                      }`}
+                    >
+                      {card.avgOverdueDays}d
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-[#6E6E73]">Recurring sites</dt>
+                    <dd
+                      className={`font-semibold ${
+                        card.recurringLocationsCount > 0 ? "text-[#C9241B]" : "text-[#1D1D1F]"
+                      }`}
+                    >
+                      {card.recurringLocationsCount}
+                    </dd>
+                  </div>
+                </dl>
+              </div>
+            );
+          })}
         </div>
       </Panel>
 

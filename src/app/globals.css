@@ -339,3 +339,25 @@ h2 {
 .ct-real-map[data-map-theme="dark"] .maplibregl-canvas:focus-visible {
   outline-color: #38BDF8;
 }
+
+@media print {
+  body {
+    background: #FFFFFF !important;
+  }
+
+  aside,
+  header,
+  .print-hidden {
+    display: none !important;
+  }
+
+  .ct-surface,
+  .ct-surface-elevated,
+  .ct-surface-inset,
+  .ct-glass {
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    background: #FFFFFF !important;
+    border-color: #E5E7EB !important;
+  }
+}

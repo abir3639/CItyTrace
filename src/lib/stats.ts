@@ -420,3 +420,113 @@ export function getActivitySince(
     .filter((event) => event.at >= cutoffIso)
     .slice(0, limit);
 }
+
+/* ------------------------------------------------------------------ */
+/* Executing agency scorecards                                         */
+/* ------------------------------------------------------------------ */
+
+export type AuthorityGrade = "A" | "B" | "C" | "D";
+
+export interface AuthorityScorecard {
+  authority: string;
+  projectCount: number;
+  completedCount: number;
+  delayedOrStalledCount: number;
+  onTimeRatePercent: number;
+  avgOverdueDays: number;
+  allocatedBdt: number;
+  reportedBdt: number;
+  verifiedBdt: number;
+  verifiedSpendSharePercent: number;
+  linkedIssuesCount: number;
+  recurringLocationsCount: number;
+  grade: AuthorityGrade;
+}
+
+export function getAuthorityScorecards(
+  issues: Issue[] = ISSUES,
+  now: string = DEMO_NOW
+): AuthorityScorecard[] {
+  const byAuthority = new Map<string, Project[]>();
+  for (const project of PROJECTS) {
+    const group = byAuthority.get(project.authority);
+    if (group) group.push(project);
+    else byAuthority.set(project.authority, [project]);
+  }
+
+  const clusters = clusterByLocation(issues);
+
+  return [...byAuthority.entries()]
+    .map(([authority, projects]) => {
+      const projectCount = projects.length;
+      const projectIds = new Set(projects.map((p) => p.id));
+      const completedCount = projects.filter((p) => p.status === "completed").length;
+      const delayedOrStalledCount = projects.filter(
+        (p) => p.status === "delayed" || p.status === "stalled"
+      ).length;
+      const onTimeRatePercent =
+        projectCount > 0 ? ((projectCount - delayedOrStalledCount) / projectCount) * 100 : 100;
+      const avgOverdueDays =
+        projectCount > 0
+          ? Math.round(
+              projects.reduce((sum, p) => sum + getProjectOverdueDays(p, now), 0) / projectCount
+            )
+          : 0;
+
+      const allocatedBdt = projects.reduce((sum, p) => sum + p.allocatedBudgetBdt, 0);
+      const reportedBdt = projects.reduce((sum, p) => sum + p.reportedExpenditureBdt, 0);
+      const verifiedBdt = projects.reduce(
+        (sum, p) => sum + (p.verifiedExpenditureBdt ?? 0),
+        0
+      );
+      const verifiedSpendSharePercent =
+        reportedBdt > 0 ? (verifiedBdt / reportedBdt) * 100 : 100;
+
+      const linkedIssues = issues.filter(
+        (issue) => issue.projectId !== undefined && projectIds.has(issue.projectId)
+      );
+      const recurringKeys = new Set<string>();
+      for (const issue of linkedIssues) {
+        if ((clusters.get(issue.locationKey)?.length ?? 0) > 1) {
+          recurringKeys.add(issue.locationKey);
+        }
+      }
+
+      let grade: AuthorityGrade;
+      if (delayedOrStalledCount === 0 && verifiedSpendSharePercent >= 80 && avgOverdueDays === 0) {
+        grade = "A";
+      } else if (
+        delayedOrStalledCount / Math.max(projectCount, 1) <= 0.5 &&
+        verifiedSpendSharePercent >= 50 &&
+        avgOverdueDays <= 90
+      ) {
+        grade = "B";
+      } else if (verifiedSpendSharePercent >= 25 && avgOverdueDays <= 180) {
+        grade = "C";
+      } else {
+        grade = "D";
+      }
+
+      return {
+        authority,
+        projectCount,
+        completedCount,
+        delayedOrStalledCount,
+        onTimeRatePercent,
+        avgOverdueDays,
+        allocatedBdt,
+        reportedBdt,
+        verifiedBdt,
+        verifiedSpendSharePercent,
+        linkedIssuesCount: linkedIssues.length,
+        recurringLocationsCount: recurringKeys.size,
+        grade,
+      };
+    })
+    .sort(
+      (a, b) =>
+        b.delayedOrStalledCount - a.delayedOrStalledCount ||
+        a.verifiedSpendSharePercent - b.verifiedSpendSharePercent ||
+        b.allocatedBdt - a.allocatedBdt
+    );
+}

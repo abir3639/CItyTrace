@@ -7,10 +7,11 @@ import {
   type MapLayerMouseEvent,
 } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-import type { MapFeature } from "@/types/citytrace";
+import type { MapFeature, MapPosition } from "@/types/citytrace";
 import {
   DHAKA_MAX_BOUNDS,
   DHAKA_RECORDS_BOUNDS,
+  nearestSectorForLngLat,
   sectorLngLat,
   toLngLat,
 } from "@/lib/geo";
@@ -35,6 +36,12 @@ export interface RealDhakaMapProps {
   autoRotate: boolean;
   pitchMode: "3d" | "flat";
   mapTheme: RealDhakaTheme;
+  reportPinMode?: boolean;
+  onPickReportLocation?: (picked: {
+    sectorId: string;
+    coordinates: MapPosition;
+    locationLabel: string;
+  }) => void;
 }
 
 type LayerSpec = Parameters<MapLibreMap["addLayer"]>[0];
@@ -126,6 +133,8 @@ export default function RealDhakaMap({
   autoRotate,
   pitchMode,
   mapTheme,
+  reportPinMode = false,
+  onPickReportLocation,
 }: RealDhakaMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
@@ -133,9 +142,25 @@ export default function RealDhakaMap({
   const [ready, setReady] = useState(false);
   const [loadError, setLoadError] = useState(false);
 
-  const latestRef = useRef({ features, pitchMode, onSelect, selectedId, mapTheme });
+  const latestRef = useRef({
+    features,
+    pitchMode,
+    onSelect,
+    selectedId,
+    mapTheme,
+    reportPinMode,
+    onPickReportLocation,
+  });
   useEffect(() => {
-    latestRef.current = { features, pitchMode, onSelect, selectedId, mapTheme };
+    latestRef.current = {
+      features,
+      pitchMode,
+      onSelect,
+      selectedId,
+      mapTheme,
+      reportPinMode,
+      onPickReportLocation,
+    };
   });
 
   const prevResetRef = useRef(resetSignal);
@@ -299,6 +324,19 @@ export default function RealDhakaMap({
       }
     });
 
+    map.on("click", (e) => {
+      if (!latestRef.current.reportPinMode || !latestRef.current.onPickReportLocation) return;
+      const hit = map.queryRenderedFeatures(e.point, { layers: ["ct-feature-dot"] });
+      if (hit.length > 0) return;
+
+      const resolved = nearestSectorForLngLat([e.lngLat.lng, e.lngLat.lat]);
+      latestRef.current.onPickReportLocation({
+        sectorId: resolved.sectorId,
+        coordinates: resolved.coordinates,
+        locationLabel: `${resolved.neighbourhood} (${e.lngLat.lat.toFixed(4)}, ${e.lngLat.lng.toFixed(4)})`,
+      });
+    });
+
     map.on("mousemove", "ct-feature-dot", (e: MapLayerMouseEvent) => {
       const id = e.features?.[0]?.properties?.id;
       if (typeof id !== "string") return;
@@ -322,7 +360,7 @@ export default function RealDhakaMap({
         );
         hoveredIdRef.current = null;
       }
-      map.getCanvas().style.cursor = "";
+      map.getCanvas().style.cursor = latestRef.current.reportPinMode ? "crosshair" : "";
     });
 
     const observer = new ResizeObserver(() => {
@@ -337,6 +375,12 @@ export default function RealDhakaMap({
       mapRef.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!ready || !map) return;
+    map.getCanvas().style.cursor = reportPinMode ? "crosshair" : "";
+  }, [reportPinMode, ready]);
 
   useEffect(() => {
     const map = mapRef.current;

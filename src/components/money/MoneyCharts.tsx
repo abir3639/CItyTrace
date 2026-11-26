@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import {
   Bar,
   BarChart,
@@ -44,6 +45,7 @@ const STATUS_COLORS: Record<string, string> = {
 const CATEGORY_COLORS = GRAPH_COLORS;
 
 export interface SpendRow {
+  projectId?: string;
   code: string;
   name: string;
   allocated: number;
@@ -52,6 +54,13 @@ export interface SpendRow {
 }
 
 export function SpendComparisonChart({ data }: { data: SpendRow[] }) {
+  const router = useRouter();
+
+  const onBarClick = (_entry: unknown, index: number) => {
+    const id = data[index]?.projectId;
+    if (id) router.push(`/public-projects/${id}`);
+  };
+
   return (
     <ChartBoundary
       fallback={
@@ -75,9 +84,30 @@ export function SpendComparisonChart({ data }: { data: SpendRow[] }) {
           <YAxis type="category" dataKey="code" tick={AXIS_STYLE} stroke={GRID_STROKE} width={72} />
           <Tooltip contentStyle={TOOLTIP_STYLE} formatter={formatBdtValue} />
           <Legend wrapperStyle={LEGEND_STYLE} />
-          <Bar dataKey="allocated" name="Allocated" fill={SPEND_COLORS.allocated} radius={[0, 4, 4, 0]} />
-          <Bar dataKey="reported" name="Reported" fill={SPEND_COLORS.reported} radius={[0, 4, 4, 0]} />
-          <Bar dataKey="verified" name="Verified" fill={SPEND_COLORS.verified} radius={[0, 4, 4, 0]} />
+          <Bar
+            dataKey="allocated"
+            name="Allocated"
+            fill={SPEND_COLORS.allocated}
+            radius={[0, 4, 4, 0]}
+            cursor="pointer"
+            onClick={onBarClick}
+          />
+          <Bar
+            dataKey="reported"
+            name="Reported"
+            fill={SPEND_COLORS.reported}
+            radius={[0, 4, 4, 0]}
+            cursor="pointer"
+            onClick={onBarClick}
+          />
+          <Bar
+            dataKey="verified"
+            name="Verified"
+            fill={SPEND_COLORS.verified}
+            radius={[0, 4, 4, 0]}
+            cursor="pointer"
+            onClick={onBarClick}
+          />
         </BarChart>
       </ChartFrame>
     </ChartBoundary>
@@ -128,11 +158,14 @@ export function CategoryBudgetChart({ data }: { data: CategoryRow[] }) {
 }
 
 export interface StatusRow {
+  statusKey?: string;
   status: string;
   count: number;
 }
 
 export function ProjectStatusChart({ data }: { data: StatusRow[] }) {
+  const router = useRouter();
+
   return (
     <ChartBoundary
       fallback={
@@ -145,7 +178,16 @@ export function ProjectStatusChart({ data }: { data: StatusRow[] }) {
           <XAxis dataKey="status" tick={AXIS_STYLE} stroke={GRID_STROKE} />
           <YAxis allowDecimals={false} tick={AXIS_STYLE} stroke={GRID_STROKE} />
           <Tooltip contentStyle={TOOLTIP_STYLE} />
-          <Bar dataKey="count" name="Projects" radius={[6, 6, 0, 0]}>
+          <Bar
+            dataKey="count"
+            name="Projects"
+            radius={[6, 6, 0, 0]}
+            cursor="pointer"
+            onClick={(_entry, index: number) => {
+              const key = data[index]?.statusKey;
+              if (key) router.push(`/public-projects?status=${key}`);
+            }}
+          >
             {data.map((entry) => (
               <Cell
                 key={entry.status}
@@ -163,12 +205,15 @@ export function ProjectStatusChart({ data }: { data: StatusRow[] }) {
 }
 
 export interface OverdueRow {
+  projectId?: string;
   code: string;
   name: string;
   days: number;
 }
 
 export function OverdueDaysChart({ data }: { data: OverdueRow[] }) {
+  const router = useRouter();
+
   return (
     <ChartBoundary
       fallback={<DataFallback rows={data.map((row) => [row.code, `${row.days} days late`])} />}
@@ -179,7 +224,17 @@ export function OverdueDaysChart({ data }: { data: OverdueRow[] }) {
           <XAxis type="number" tick={AXIS_STYLE} stroke={GRID_STROKE} unit="d" />
           <YAxis type="category" dataKey="code" tick={AXIS_STYLE} stroke={GRID_STROKE} width={72} />
           <Tooltip contentStyle={TOOLTIP_STYLE} formatter={formatDayCount} />
-          <Bar dataKey="days" name="Days overdue" fill={PALETTE.amber} radius={[0, 6, 6, 0]} />
+          <Bar
+            dataKey="days"
+            name="Days overdue"
+            fill={PALETTE.amber}
+            radius={[0, 6, 6, 0]}
+            cursor="pointer"
+            onClick={(_entry, index: number) => {
+              const id = data[index]?.projectId;
+              if (id) router.push(`/public-projects/${id}`);
+            }}
+          />
         </BarChart>
       </ChartFrame>
     </ChartBoundary>

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { SECTORS } from "@/data";
 import { createIssue } from "@/lib/issue-store";
-import { ISSUE_CATEGORIES, type IssueCategory } from "@/types/citytrace";
+import { ISSUE_CATEGORIES, type IssueCategory, type MapPosition } from "@/types/citytrace";
 
 const MAX_PHOTO_CHARS = 2_500_000; // ~1.8 MB of image data as base64
 
@@ -12,6 +12,7 @@ interface Body {
   location?: unknown;
   sectorId?: unknown;
   locationKey?: unknown;
+  coordinates?: unknown;
   photoDataUrl?: unknown;
 }
 
@@ -55,6 +56,21 @@ export async function POST(request: Request) {
     }
   }
 
+  let coordinates: MapPosition | undefined;
+  if (
+    Array.isArray(body.coordinates) &&
+    body.coordinates.length === 2 &&
+    typeof body.coordinates[0] === "number" &&
+    typeof body.coordinates[1] === "number" &&
+    Number.isFinite(body.coordinates[0]) &&
+    Number.isFinite(body.coordinates[1])
+  ) {
+    coordinates = [
+      Math.max(-18, Math.min(18, Number(body.coordinates[0].toFixed(2)))),
+      Math.max(-18, Math.min(18, Number(body.coordinates[1].toFixed(2)))),
+    ];
+  }
+
   if (Object.keys(errors).length > 0) {
     return NextResponse.json({ error: "Validation failed.", fields: errors }, { status: 422 });
   }
@@ -66,6 +82,7 @@ export async function POST(request: Request) {
     location,
     sectorId,
     ...(locationKey ? { locationKey } : {}),
+    ...(coordinates ? { coordinates } : {}),
     photoDataUrl,
   });
 

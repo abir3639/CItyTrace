@@ -8,6 +8,8 @@ import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { Navigation } from "lucide-react";
 import type { MapFeature, MapPosition } from "@/types/citytrace";
 import { TONES, mapFeatureTone } from "@/utils/formatters";
+import { getSector } from "@/data";
+import { nearestSectorForPosition } from "@/lib/geo";
 import {
   CITY_MAPS,
   CIVIC_LANDMARKS,
@@ -109,11 +111,19 @@ function DhakaDistrictRoads({
   renderMode,
   onSelectCorridor,
   onHoverCorridor,
+  reportPinMode = false,
+  onPickReportLocation,
 }: {
   mapId: CityMapId;
   renderMode: CityRenderMode;
   onSelectCorridor: (preferredFeatureIds: string[]) => void;
   onHoverCorridor: (label: string | null) => void;
+  reportPinMode?: boolean;
+  onPickReportLocation?: (picked: {
+    sectorId: string;
+    coordinates: MapPosition;
+    locationLabel: string;
+  }) => void;
 }) {
   const [hoveredCorridor, setHoveredCorridor] = useState<string | null>(null);
   const dashPositionsX = [
@@ -122,11 +132,15 @@ function DhakaDistrictRoads({
   const dashPositionsZ = [-11.5, -9.5, -7.8, -6.4, -4.6, -2.8, -1.0, 2.9, 4.7, 6.5, 8.5, 10.6];
 
   useEffect(() => {
-    document.body.style.cursor = hoveredCorridor ? "pointer" : "auto";
+    document.body.style.cursor = reportPinMode
+      ? "crosshair"
+      : hoveredCorridor
+        ? "pointer"
+        : "auto";
     return () => {
       document.body.style.cursor = "auto";
     };
-  }, [hoveredCorridor]);
+  }, [hoveredCorridor, reportPinMode]);
 
   const roadOpacity = renderMode === "xray" ? 0.5 : 1;
   const roadColor = mapId === "arterial-engineering" ? "#C8D0DC" : "#CFD6E0";
@@ -135,7 +149,24 @@ function DhakaDistrictRoads({
   return (
     <group>
       {/* Daylight architectural ground plane */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.04, 0]} receiveShadow>
+      <mesh
+        rotation={[-Math.PI / 2, 0, 0]}
+        position={[0, -0.04, 0]}
+        receiveShadow
+        onClick={(event) => {
+          if (!reportPinMode || !onPickReportLocation) return;
+          event.stopPropagation();
+          const x = Number(event.point.x.toFixed(2));
+          const z = Number(event.point.z.toFixed(2));
+          const sectorId = nearestSectorForPosition([x, z]);
+          const sector = getSector(sectorId);
+          onPickReportLocation({
+            sectorId,
+            coordinates: [x, z],
+            locationLabel: `${sector?.name ?? sectorId} sector pin (${x}, ${z})`,
+          });
+        }}
+      >
         <planeGeometry args={[44, 44]} />
         <meshStandardMaterial color="#E7ECF2" roughness={0.95} metalness={0.0} />
       </mesh>
@@ -646,6 +677,12 @@ interface CitySceneProps {
   zoomSignal: { delta: number; seq: number } | null;
   sectorFocus?: MapPosition | null;
   showRadar?: boolean;
+  reportPinMode?: boolean;
+  onPickReportLocation?: (picked: {
+    sectorId: string;
+    coordinates: MapPosition;
+    locationLabel: string;
+  }) => void;
 }
 
 export default function CityScene({
@@ -661,6 +698,8 @@ export default function CityScene({
   zoomSignal,
   sectorFocus = null,
   showRadar = false,
+  reportPinMode = false,
+  onPickReportLocation,
 }: CitySceneProps) {
   const markerDomRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const [hoveredId, setHoveredId] = useState<string | null>(null);
@@ -706,7 +745,7 @@ export default function CityScene({
     mapId === "hydrology-basin";
 
   return (
-    <div className="relative h-full w-full">
+    <div className={`relative h-full w-full ${reportPinMode ? "cursor-crosshair" : ""}`}>
       <Canvas
         shadows
         dpr={[1, 1.5]}
@@ -744,6 +783,8 @@ export default function CityScene({
           renderMode={renderMode}
           onSelectCorridor={handleSelectCorridor}
           onHoverCorridor={setHoveredCorridorLabel}
+          reportPinMode={reportPinMode}
+          onPickReportLocation={onPickReportLocation}
         />
 
         {DHAKA_BUILDINGS.map((b) => {

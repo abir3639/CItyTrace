@@ -14,6 +14,8 @@ import { Panel, PanelHeader } from "@/components/ui/Panel";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState, KeyValue } from "@/components/ui/Data";
 import { EvidenceGallery } from "@/components/evidence/EvidenceTile";
+import EvidenceCompareSlider from "@/components/evidence/EvidenceCompareSlider";
+import CitizenConfirmButton from "@/components/issues/CitizenConfirmButton";
 import IssueStatusControls from "@/components/issues/IssueStatusControls";
 import {
   evidenceById,
@@ -180,7 +182,8 @@ export default async function IssueDetailPage({
               title={`Evidence (${evidence.length})`}
               description="Supporting documents, photos, and verification status."
             />
-            <div className="mt-3">
+            <div className="mt-3 flex flex-col gap-4">
+              {evidence.length >= 2 ? <EvidenceCompareSlider items={evidence} /> : null}
               <EvidenceGallery items={evidence} />
             </div>
           </Panel>
@@ -230,6 +233,20 @@ export default async function IssueDetailPage({
         </div>
 
         <div className="flex flex-col gap-5">
+          <Panel className="p-5">
+            <PanelHeader
+              title="Citizen Verification"
+              description="Confirm if this problem still exists or has returned after repair."
+            />
+            <div className="mt-3.5">
+              <CitizenConfirmButton
+                issueId={issue.id}
+                reportCount={issue.reportCount}
+                status={issue.status}
+              />
+            </div>
+          </Panel>
+
           <Panel glow className="p-5">
             <PanelHeader
               title="Issue Management"

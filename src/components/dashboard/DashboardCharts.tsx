@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import {
   Area,
   AreaChart,
@@ -80,12 +81,20 @@ export function IssueTrendChart({ data }: { data: TrendPoint[] }) {
 }
 
 export interface CategoryPerformanceRow {
+  categoryId?: string;
   category: string;
   open: number;
   resolved: number;
 }
 
 export function CategoryPerformanceChart({ data }: { data: CategoryPerformanceRow[] }) {
+  const router = useRouter();
+
+  const onBarClick = (_entry: unknown, index: number) => {
+    const id = data[index]?.categoryId;
+    if (id) router.push(`/civic-issues?category=${id}`);
+  };
+
   return (
     <ChartBoundary
       fallback={
@@ -101,8 +110,22 @@ export function CategoryPerformanceChart({ data }: { data: CategoryPerformanceRo
           <YAxis allowDecimals={false} tick={AXIS_STYLE} stroke={GRID_STROKE} />
           <Tooltip contentStyle={TOOLTIP_STYLE} />
           <Legend wrapperStyle={LEGEND_STYLE} />
-          <Bar dataKey="open" name="Open" fill={PALETTE.orange} radius={[6, 6, 0, 0]} />
-          <Bar dataKey="resolved" name="Resolved" fill={PALETTE.green} radius={[6, 6, 0, 0]} />
+          <Bar
+            dataKey="open"
+            name="Open"
+            fill={PALETTE.orange}
+            radius={[6, 6, 0, 0]}
+            cursor="pointer"
+            onClick={onBarClick}
+          />
+          <Bar
+            dataKey="resolved"
+            name="Resolved"
+            fill={PALETTE.green}
+            radius={[6, 6, 0, 0]}
+            cursor="pointer"
+            onClick={onBarClick}
+          />
         </BarChart>
       </ChartFrame>
     </ChartBoundary>
@@ -117,6 +140,13 @@ export interface SectorComparisonRow {
 }
 
 export function SectorComparisonChart({ data }: { data: SectorComparisonRow[] }) {
+  const router = useRouter();
+
+  const onBarClick = (_entry: unknown, index: number) => {
+    const sector = data[index]?.sector;
+    if (sector) router.push(`/civic-issues?sector=${sector}`);
+  };
+
   return (
     <ChartBoundary
       fallback={
@@ -135,8 +165,22 @@ export function SectorComparisonChart({ data }: { data: SectorComparisonRow[] })
           <YAxis type="category" dataKey="sector" tick={AXIS_STYLE} stroke={GRID_STROKE} width={48} />
           <Tooltip contentStyle={TOOLTIP_STYLE} />
           <Legend wrapperStyle={LEGEND_STYLE} />
-          <Bar dataKey="open" name="Open issues" fill={PALETTE.blue} radius={[0, 6, 6, 0]} />
-          <Bar dataKey="recurring" name="Recurring sites" fill={PALETTE.orange} radius={[0, 6, 6, 0]} />
+          <Bar
+            dataKey="open"
+            name="Open issues"
+            fill={PALETTE.blue}
+            radius={[0, 6, 6, 0]}
+            cursor="pointer"
+            onClick={onBarClick}
+          />
+          <Bar
+            dataKey="recurring"
+            name="Recurring sites"
+            fill={PALETTE.orange}
+            radius={[0, 6, 6, 0]}
+            cursor="pointer"
+            onClick={onBarClick}
+          />
         </BarChart>
       </ChartFrame>
     </ChartBoundary>
@@ -150,6 +194,8 @@ export interface SpendSplitRow {
 }
 
 export function SpendSplitChart({ data }: { data: SpendSplitRow[] }) {
+  const router = useRouter();
+
   return (
     <ChartBoundary
       fallback={<DataFallback rows={data.map((row) => [row.label, formatBdtCompact(row.value)])} />}
@@ -165,6 +211,8 @@ export function SpendSplitChart({ data }: { data: SpendSplitRow[] }) {
             paddingAngle={2}
             stroke="#FFFFFF"
             strokeWidth={2}
+            cursor="pointer"
+            onClick={() => router.push("/money-tracker")}
           >
             {data.map((entry) => (
               <Cell key={entry.label} fill={entry.fill} />

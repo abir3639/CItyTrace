@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { StatCard } from "@/components/ui/Data";
 import { Badge } from "@/components/ui/Badge";
 import InvestigationWorkbench from "@/components/ai/InvestigationWorkbench";
+import ProjectComparison from "@/components/ai/ProjectComparison";
 import CivicAsk from "@/components/ai/CivicAsk";
 import FindingsFeed from "@/components/ai/FindingsFeed";
 import { projectsById } from "@/data";
@@ -96,6 +97,8 @@ export default async function AiInvestigationPage({
         initialProjectId={initialProjectId}
         initialReport={initialReport}
       />
+
+      <ProjectComparison issues={issues} />
     </div>
   );
 }
