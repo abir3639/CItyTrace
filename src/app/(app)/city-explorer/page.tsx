@@ -19,6 +19,7 @@ export default async function CityExplorerPage({
     typeof params.feature === "string" && params.feature.length > 0
       ? params.feature
       : null;
+  const initialView = params.view === "real" ? "real" : "twin";
 
   const issues = listIssues();
   const evidence = listAllEvidence();
@@ -27,6 +28,7 @@ export default async function CityExplorerPage({
   return (
     <CityExplorer
       initialFeatureId={initialFeatureId}
+      initialView={initialView}
       features={features}
       issues={issues}
       evidence={evidence}

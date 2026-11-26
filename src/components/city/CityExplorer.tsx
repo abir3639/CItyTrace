@@ -1,26 +1,40 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import {
   ArrowRight,
+  Box,
   Building2,
   CalendarClock,
   Compass,
   FileText,
+  Globe,
   Landmark,
   MapPin,
   Minus,
+  Moon,
   Pause,
   Play,
   Plus,
   RotateCcw,
   ShieldAlert,
   Sparkles,
+  Sun,
   Wrench,
   X,
 } from "lucide-react";
 import CityScene from "./CityScene";
+import {
+  REAL_DHAKA_MARKER_COLORS,
+  type RealDhakaTheme,
+} from "./realDhakaStyle";
+
+const RealDhakaMap = dynamic(() => import("./RealDhakaMap"), {
+  ssr: false,
+  loading: () => <div className="ct-skeleton absolute inset-0" aria-hidden="true" />,
+});
 import {
   CITY_MAPS,
   CIVIC_LANDMARKS,
@@ -106,14 +120,19 @@ function matchesFilter(feature: MapFeature, filter: FeatureFilter): boolean {
   }
 }
 
+export type ExplorerView = "twin" | "real";
+
 export default function CityExplorer({
   initialFeatureId = null,
+  initialView = "twin",
   features,
   issues,
   evidence,
 }: {
   /** Deep link from another module, e.g. `?feature=issue:ISS-003`. */
   initialFeatureId?: string | null;
+  /** Active map renderer: stylized Three.js Digital Twin or Real Dhaka 3D map. */
+  initialView?: ExplorerView;
   /** Map features built server-side so citizen reports appear immediately. */
   features: MapFeature[];
   /** Live issues including citizen submissions. */
@@ -121,12 +140,15 @@ export default function CityExplorer({
   /** Live evidence including citizen-uploaded photos. */
   evidence: Evidence[];
 }) {
+  const [view, setView] = useState<ExplorerView>(initialView);
   const [mapId, setMapId] = useState<CityMapId>("metro-twin");
   const [renderMode, setRenderMode] = useState<CityRenderMode>("twin");
+  const [pitchMode, setPitchMode] = useState<"3d" | "flat">("3d");
+  const [mapTheme, setMapTheme] = useState<RealDhakaTheme>("daylight");
   const [selectedId, setSelectedId] = useState<string | null>(initialFeatureId);
   const [selectedLandmarkId, setSelectedLandmarkId] = useState<string | null>(null);
   const [landmarksMenuOpen, setLandmarksMenuOpen] = useState(false);
-  const [autoRotate, setAutoRotate] = useState(true);
+  const [autoRotate, setAutoRotate] = useState(initialView === "twin");
   const [resetSignal, setResetSignal] = useState(0);
   const [zoomSignal, setZoomSignal] = useState<{ delta: number; seq: number } | null>(null);
   const [showRadar, setShowRadar] = useState(false);
@@ -196,6 +218,24 @@ export default function CityExplorer({
     setAutoRotate(nextMapId === "metro-twin");
   }, []);
 
+  const handleSelectView = useCallback(
+    (next: ExplorerView) => {
+      setView(next);
+      setSelectedLandmarkId(null);
+      setLandmarksMenuOpen(false);
+      setAutoRotate(next === "twin" && mapId === "metro-twin");
+
+      const url = new URL(window.location.href);
+      if (next === "real") {
+        url.searchParams.set("view", "real");
+      } else {
+        url.searchParams.delete("view");
+      }
+      window.history.replaceState(null, "", url.toString());
+    },
+    [mapId]
+  );
+
   const focusShortcut = useCallback(
     (preferredIds: string[]) => {
       const match =
@@ -220,53 +260,98 @@ export default function CityExplorer({
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Compact hero header row: title + segmented 3D Map switcher */}
+      {/* Compact hero header row: title + view & 3D Map switcher */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-baseline gap-2.5">
           <h1 className="text-[22px] font-semibold tracking-[-0.025em] text-[#1D1D1F] sm:text-[24px]">
             City Explorer
           </h1>
           <span className="text-[12.5px] text-[#6E6E73] tabular-nums">
-            {visibleFeatures.length} records · {DHAKA_BUILDINGS.length} buildings
+            {view === "twin"
+              ? `${visibleFeatures.length} records · ${DHAKA_BUILDINGS.length} buildings`
+              : `${visibleFeatures.length} records · OpenStreetMap 3D buildings`}
           </span>
         </div>
 
-        <div
-          role="group"
-          aria-label="3D District Map Selector"
-          className="ct-segmented overflow-x-auto max-w-full"
-        >
-          {CITY_MAPS.map((map) => (
+        <div className="flex flex-wrap items-center gap-2 max-w-full">
+          <div role="group" aria-label="Map type" className="ct-segmented">
             <button
-              key={map.id}
               type="button"
-              aria-pressed={mapId === map.id}
-              onClick={() => handleSelectMap(map.id)}
-              title={`${map.title} — ${map.subtitle}`}
-              className="ct-segmented-item whitespace-nowrap"
+              aria-pressed={view === "twin"}
+              onClick={() => handleSelectView("twin")}
+              className="ct-segmented-item inline-flex items-center gap-1.5 whitespace-nowrap"
             >
-              {map.shortLabel}
+              <Box className="h-3.5 w-3.5" />
+              Digital Twin
             </button>
-          ))}
+            <button
+              type="button"
+              aria-pressed={view === "real"}
+              onClick={() => handleSelectView("real")}
+              className="ct-segmented-item inline-flex items-center gap-1.5 whitespace-nowrap"
+            >
+              <Globe className="h-3.5 w-3.5" />
+              Real Dhaka
+            </button>
+          </div>
+
+          {view === "twin" ? (
+            <div
+              role="group"
+              aria-label="3D District Map Selector"
+              className="ct-segmented overflow-x-auto max-w-full"
+            >
+              {CITY_MAPS.map((map) => (
+                <button
+                  key={map.id}
+                  type="button"
+                  aria-pressed={mapId === map.id}
+                  onClick={() => handleSelectMap(map.id)}
+                  title={`${map.title} — ${map.subtitle}`}
+                  className="ct-segmented-item whitespace-nowrap"
+                >
+                  {map.shortLabel}
+                </button>
+              ))}
+            </div>
+          ) : null}
         </div>
       </div>
 
       {/* Hero Full-Viewport 3D Map Surface */}
-      <div className="relative h-[calc(100vh-158px)] min-h-[540px] w-full overflow-hidden rounded-[24px] border border-black/[0.07] bg-[#EEF1F6] shadow-[0_12px_40px_-14px_rgba(15,23,42,0.14)]">
-        <CityScene
-          mapId={mapId}
-          renderMode={renderMode}
-          features={visibleFeatures}
-          selectedId={selectedId}
-          selectedLandmarkId={selectedLandmarkId}
-          onSelect={handleSelect}
-          onSelectLandmark={handleSelectLandmark}
-          autoRotate={autoRotate}
-          resetSignal={resetSignal}
-          zoomSignal={zoomSignal}
-          sectorFocus={sectorFocus}
-          showRadar={showRadar}
-        />
+      <div
+        className={`relative h-[calc(100vh-158px)] min-h-[540px] w-full overflow-hidden rounded-[24px] border border-black/[0.07] shadow-[0_12px_40px_-14px_rgba(15,23,42,0.14)] transition-colors duration-300 ${
+          view === "real" && mapTheme === "dark" ? "bg-[#101827]" : "bg-[#EEF1F6]"
+        }`}
+      >
+        {view === "twin" ? (
+          <CityScene
+            mapId={mapId}
+            renderMode={renderMode}
+            features={visibleFeatures}
+            selectedId={selectedId}
+            selectedLandmarkId={selectedLandmarkId}
+            onSelect={handleSelect}
+            onSelectLandmark={handleSelectLandmark}
+            autoRotate={autoRotate}
+            resetSignal={resetSignal}
+            zoomSignal={zoomSignal}
+            sectorFocus={sectorFocus}
+            showRadar={showRadar}
+          />
+        ) : (
+          <RealDhakaMap
+            features={visibleFeatures}
+            selectedId={selectedId}
+            onSelect={handleSelect}
+            sectorFocus={sectorFilter}
+            resetSignal={resetSignal}
+            zoomSignal={zoomSignal}
+            autoRotate={autoRotate}
+            pitchMode={pitchMode}
+            mapTheme={mapTheme}
+          />
+        )}
 
         {/* Floating Top-Left Consolidated Toolbar: Filters + Sector + Shortcuts */}
         <div className="pointer-events-none absolute top-3 right-3 left-3 z-20 flex flex-wrap items-start justify-between gap-2">
@@ -341,7 +426,7 @@ export default function CityExplorer({
           </div>
 
           {/* Top-right compact Landmarks trigger when inspector is closed */}
-          {!hasInspectorOpen ? (
+          {!hasInspectorOpen && view === "twin" ? (
             <div className="pointer-events-auto relative">
               <button
                 type="button"
@@ -386,7 +471,11 @@ export default function CityExplorer({
         </div>
 
         {/* Floating Bottom-Left Apple Maps Legend + Overview Radar Toggle */}
-        <div className="pointer-events-none absolute bottom-3 left-3 z-20 flex flex-wrap items-center gap-2">
+        <div
+          className={`pointer-events-none absolute left-3 z-20 flex flex-wrap items-center gap-2 ${
+            view === "real" ? "bottom-10" : "bottom-3"
+          }`}
+        >
           <div className="ct-glass-pill pointer-events-auto flex flex-wrap items-center gap-3 rounded-full px-3 py-1.5 text-[11.5px] font-medium text-[#1D1D1F]">
             {(
               [
@@ -396,27 +485,42 @@ export default function CityExplorer({
               ] as const
             ).map(([state, label]) => (
               <span key={state} className="inline-flex items-center gap-1.5">
-                <span className={`h-2 w-2 rounded-full ${TONES[mapFeatureTone(state)].dot}`} />
+                {view === "real" ? (
+                  <span
+                    className="h-2 w-2 rounded-full"
+                    style={{ backgroundColor: REAL_DHAKA_MARKER_COLORS[state] }}
+                  />
+                ) : (
+                  <span className={`h-2 w-2 rounded-full ${TONES[mapFeatureTone(state)].dot}`} />
+                )}
                 {label}
               </span>
             ))}
-            <span className="hidden items-center gap-1.5 sm:inline-flex">
-              <span className="h-2 w-2 rounded-full border border-[#007AFF] bg-[#007AFF]/20" />
-              Landmark
-            </span>
+            {view === "twin" ? (
+              <span className="hidden items-center gap-1.5 sm:inline-flex">
+                <span className="h-2 w-2 rounded-full border border-[#007AFF] bg-[#007AFF]/20" />
+                Landmark
+              </span>
+            ) : null}
           </div>
 
-          <button
-            type="button"
-            aria-pressed={showRadar}
-            onClick={() => setShowRadar((prev) => !prev)}
-            className={`ct-glass-pill pointer-events-auto hidden items-center gap-1.5 rounded-full px-3 py-1.5 text-[11.5px] font-medium transition-all sm:inline-flex cursor-pointer active:scale-[0.98] ${
-              showRadar ? "text-[#007AFF]" : "text-[#1D1D1F]"
-            }`}
-          >
-            <Compass className="h-3.5 w-3.5 text-[#007AFF]" />
-            Radar
-          </button>
+          {view === "twin" ? (
+            <button
+              type="button"
+              aria-pressed={showRadar}
+              onClick={() => setShowRadar((prev) => !prev)}
+              className={`ct-glass-pill pointer-events-auto hidden items-center gap-1.5 rounded-full px-3 py-1.5 text-[11.5px] font-medium transition-all sm:inline-flex cursor-pointer active:scale-[0.98] ${
+                showRadar ? "text-[#007AFF]" : "text-[#1D1D1F]"
+              }`}
+            >
+              <Compass className="h-3.5 w-3.5 text-[#007AFF]" />
+              Radar
+            </button>
+          ) : (
+            <span className="ct-glass-pill pointer-events-auto rounded-full px-3 py-1.5 text-[11.5px] text-[#6E6E73]">
+              Approximate locations · simulated records
+            </span>
+          )}
         </div>
 
         {/* Floating Bottom-Right Layer Mode & Camera Controls */}
@@ -425,30 +529,99 @@ export default function CityExplorer({
             hasInspectorOpen ? "lg:right-[364px]" : ""
           }`}
         >
-          <div
-            role="group"
-            aria-label="3D render mode"
-            className="ct-glass-pill pointer-events-auto inline-flex items-center gap-0.5 rounded-full p-1"
-          >
-            {RENDER_MODES.map((mode) => {
-              const active = renderMode === mode.id;
-              return (
+          {view === "twin" ? (
+            <div
+              role="group"
+              aria-label="3D render mode"
+              className="ct-glass-pill pointer-events-auto inline-flex items-center gap-0.5 rounded-full p-1"
+            >
+              {RENDER_MODES.map((mode) => {
+                const active = renderMode === mode.id;
+                return (
+                  <button
+                    key={mode.id}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => setRenderMode(mode.id)}
+                    className={`rounded-full px-2.5 py-1 text-[11.5px] font-medium transition-all cursor-pointer ${
+                      active
+                        ? "bg-[#007AFF] text-white shadow-sm"
+                        : "text-[#6E6E73] hover:text-[#1D1D1F]"
+                    }`}
+                  >
+                    {mode.label}
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <>
+              <div
+                role="group"
+                aria-label="Map appearance"
+                className="ct-glass-pill pointer-events-auto inline-flex items-center gap-0.5 rounded-full p-1"
+              >
                 <button
-                  key={mode.id}
                   type="button"
-                  aria-pressed={active}
-                  onClick={() => setRenderMode(mode.id)}
-                  className={`rounded-full px-2.5 py-1 text-[11.5px] font-medium transition-all cursor-pointer ${
-                    active
-                      ? "bg-[#007AFF] text-white shadow-sm"
+                  aria-label="Daylight map mode"
+                  aria-pressed={mapTheme === "daylight"}
+                  onClick={() => setMapTheme("daylight")}
+                  className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11.5px] font-medium transition-all cursor-pointer ${
+                    mapTheme === "daylight"
+                      ? "bg-[#1D1D1F] text-white shadow-sm"
                       : "text-[#6E6E73] hover:text-[#1D1D1F]"
                   }`}
                 >
-                  {mode.label}
+                  <Sun className="h-3 w-3" />
+                  Day
                 </button>
-              );
-            })}
-          </div>
+                <button
+                  type="button"
+                  aria-label="Dark map mode"
+                  aria-pressed={mapTheme === "dark"}
+                  onClick={() => setMapTheme("dark")}
+                  className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11.5px] font-medium transition-all cursor-pointer ${
+                    mapTheme === "dark"
+                      ? "bg-[#1D1D1F] text-white shadow-sm"
+                      : "text-[#6E6E73] hover:text-[#1D1D1F]"
+                  }`}
+                >
+                  <Moon className="h-3 w-3" />
+                  Dark
+                </button>
+              </div>
+
+              <div
+                role="group"
+                aria-label="Map tilt mode"
+                className="ct-glass-pill pointer-events-auto inline-flex items-center gap-0.5 rounded-full p-1"
+              >
+                {(
+                  [
+                    ["3d", "3D"],
+                    ["flat", "Flat"],
+                  ] as const
+                ).map(([mode, label]) => {
+                  const active = pitchMode === mode;
+                  return (
+                    <button
+                      key={mode}
+                      type="button"
+                      aria-pressed={active}
+                      onClick={() => setPitchMode(mode)}
+                      className={`rounded-full px-2.5 py-1 text-[11.5px] font-medium transition-all cursor-pointer ${
+                        active
+                          ? "bg-[#007AFF] text-white shadow-sm"
+                          : "text-[#6E6E73] hover:text-[#1D1D1F]"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
 
           <div className="ct-glass-pill pointer-events-auto flex items-center divide-x divide-black/[0.07] overflow-hidden rounded-full">
             <button
@@ -487,7 +660,7 @@ export default function CityExplorer({
             <button
               type="button"
               onClick={() => setResetSignal((value) => value + 1)}
-              aria-label="Reset 3D camera view"
+              aria-label="Reset camera view"
               title="Reset view"
               className="p-2 text-[#1D1D1F] transition-colors hover:bg-black/[0.05] cursor-pointer"
             >
