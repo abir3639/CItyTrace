@@ -1,6 +1,3 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import type {
   NotificationCategory,
   UserNotification,
@@ -9,21 +6,20 @@ import type {
   WatchlistEntityType,
 } from "@/types/citytrace";
 import { listPublicUsers } from "./auth-store";
+import { readState, updateState } from "./db";
 import { DEMO_NOW } from "./stats";
 
 /**
  * Runtime watchlist & isolated per-user notification store.
  *
- * Persisted in the OS temp directory (`citytrace-runtime-governance.json`)
- * and cleared automatically by `npm run reset:demo`.
+ * Persisted as the `governance` row of the Supabase `app_state` table (see
+ * `./db`), or in the OS temp directory when Supabase is not configured.
+ * Cleared by `npm run reset:demo`.
  *
  * Server-only — never import this from a client component.
  */
 
-const GOVERNANCE_STORE_FILE = path.join(
-  os.tmpdir(),
-  "citytrace-runtime-governance.json"
-);
+const STORE_KEY = "governance";
 
 interface GovernanceStoreShape {
   watchlists: Record<string, UserWatchlist>;
@@ -152,30 +148,30 @@ const DEFAULT_SEEDED_NOTIFICATIONS: Record<string, UserNotification[]> = {
   ],
 };
 
-function readGovernanceStore(): GovernanceStoreShape {
-  try {
-    const raw = fs.readFileSync(GOVERNANCE_STORE_FILE, "utf8");
-    const parsed = JSON.parse(raw) as Partial<GovernanceStoreShape>;
-    return {
-      watchlists:
-        parsed.watchlists && typeof parsed.watchlists === "object"
-          ? parsed.watchlists
-          : {},
-      notifications:
-        parsed.notifications && typeof parsed.notifications === "object"
-          ? parsed.notifications
-          : {},
-    };
-  } catch {
-    return { watchlists: {}, notifications: {} };
-  }
+function emptyStore(): GovernanceStoreShape {
+  return { watchlists: {}, notifications: {} };
 }
 
-function writeGovernanceStore(store: GovernanceStoreShape): void {
-  fs.writeFileSync(
-    GOVERNANCE_STORE_FILE,
-    JSON.stringify(store, null, 2),
-    "utf8"
+/**
+ * Repairs a stored value in place so it always has both maps. Works in place
+ * (rather than returning a copy) so changes made inside `updateState` are saved.
+ */
+function normalizeStore(raw: Partial<GovernanceStoreShape>): GovernanceStoreShape {
+  if (!raw.watchlists || typeof raw.watchlists !== "object") raw.watchlists = {};
+  if (!raw.notifications || typeof raw.notifications !== "object") raw.notifications = {};
+  return raw as GovernanceStoreShape;
+}
+
+async function readGovernanceStore(): Promise<GovernanceStoreShape> {
+  return normalizeStore(
+    await readState<Partial<GovernanceStoreShape>>(STORE_KEY, emptyStore())
+  );
+}
+
+/** Read, change and save the store. `mutate` must have no side effects — it may run more than once. */
+function updateGovernanceStore<R>(mutate: (store: GovernanceStoreShape) => R): Promise<R> {
+  return updateState<Partial<GovernanceStoreShape>, R>(STORE_KEY, emptyStore(), (raw) =>
+    mutate(normalizeStore(raw))
   );
 }
 
@@ -183,8 +179,7 @@ function emptyWatchlist(): UserWatchlist {
   return { issues: [], sectors: [], projects: [] };
 }
 
-export function getUserWatchlist(userId: string): UserWatchlist {
-  const store = readGovernanceStore();
+function watchlistFrom(store: GovernanceStoreShape, userId: string): UserWatchlist {
   const stored = store.watchlists[userId];
   if (stored) {
     return {
@@ -203,13 +198,15 @@ export function getUserWatchlist(userId: string): UserWatchlist {
     : emptyWatchlist();
 }
 
-export function toggleWatchlistItem(
+export async function getUserWatchlist(userId: string): Promise<UserWatchlist> {
+  return watchlistFrom(await readGovernanceStore(), userId);
+}
+
+export async function toggleWatchlistItem(
   userId: string,
   entityType: WatchlistEntityType,
   entityId: string
-): { watchlist: UserWatchlist; following: boolean } {
-  const store = readGovernanceStore();
-  const current = getUserWatchlist(userId);
+): Promise<{ watchlist: UserWatchlist; following: boolean }> {
   const key =
     entityType === "issue"
       ? "issues"
@@ -217,27 +214,32 @@ export function toggleWatchlistItem(
         ? "sectors"
         : "projects";
 
-  const list = [...current[key]];
-  const exists = list.includes(entityId);
-  const nextList = exists
-    ? list.filter((item) => item !== entityId)
-    : [...list, entityId];
+  return updateGovernanceStore((store) => {
+    const current = watchlistFrom(store, userId);
+    const list = [...current[key]];
+    const exists = list.includes(entityId);
+    const nextList = exists
+      ? list.filter((item) => item !== entityId)
+      : [...list, entityId];
 
-  const updated: UserWatchlist = {
-    ...current,
-    [key]: nextList,
-  };
-  store.watchlists[userId] = updated;
-  writeGovernanceStore(store);
+    const updated: UserWatchlist = {
+      ...current,
+      [key]: nextList,
+    };
+    store.watchlists[userId] = updated;
 
-  return { watchlist: updated, following: !exists };
+    return { watchlist: updated, following: !exists };
+  });
 }
 
-export function getUserNotifications(userId: string): UserNotification[] {
-  const store = readGovernanceStore();
+function notificationsFrom(store: GovernanceStoreShape, userId: string): UserNotification[] {
   const existing = store.notifications[userId];
   const base = existing ?? DEFAULT_SEEDED_NOTIFICATIONS[userId] ?? [];
   return [...base].sort((a, b) => b.at.localeCompare(a.at));
+}
+
+export async function getUserNotifications(userId: string): Promise<UserNotification[]> {
+  return notificationsFrom(await readGovernanceStore(), userId);
 }
 
 function ensureUserNotificationBucket(
@@ -252,25 +254,25 @@ function ensureUserNotificationBucket(
   return store.notifications[userId];
 }
 
-export function markNotificationRead(
+export async function markNotificationRead(
   userId: string,
   notificationId: string
-): UserNotification[] {
-  const store = readGovernanceStore();
-  const list = ensureUserNotificationBucket(store, userId);
-  store.notifications[userId] = list.map((item) =>
-    item.id === notificationId ? { ...item, read: true } : item
-  );
-  writeGovernanceStore(store);
-  return getUserNotifications(userId);
+): Promise<UserNotification[]> {
+  return updateGovernanceStore((store) => {
+    const list = ensureUserNotificationBucket(store, userId);
+    store.notifications[userId] = list.map((item) =>
+      item.id === notificationId ? { ...item, read: true } : item
+    );
+    return notificationsFrom(store, userId);
+  });
 }
 
-export function markAllNotificationsRead(userId: string): UserNotification[] {
-  const store = readGovernanceStore();
-  const list = ensureUserNotificationBucket(store, userId);
-  store.notifications[userId] = list.map((item) => ({ ...item, read: true }));
-  writeGovernanceStore(store);
-  return getUserNotifications(userId);
+export async function markAllNotificationsRead(userId: string): Promise<UserNotification[]> {
+  return updateGovernanceStore((store) => {
+    const list = ensureUserNotificationBucket(store, userId);
+    store.notifications[userId] = list.map((item) => ({ ...item, read: true }));
+    return notificationsFrom(store, userId);
+  });
 }
 
 export interface DispatchNotificationInput {
@@ -294,66 +296,61 @@ export interface DispatchNotificationInput {
  * issue/sector/project plus authorized department officials or verifiers,
  * strictly deduplicated by `dedupeKey` per recipient.
  */
-export function dispatchAccountabilityNotifications(
+export async function dispatchAccountabilityNotifications(
   input: DispatchNotificationInput
-): void {
-  const store = readGovernanceStore();
+): Promise<void> {
   const users = listPublicUsers();
-  const recipientIds = new Set<string>(input.explicitUserIds ?? []);
-
-  for (const user of users) {
-    if (input.excludeUserId && user.id === input.excludeUserId) continue;
-
-    // 1. Direct watchlist interest
-    const wl = store.watchlists[user.id] ?? DEFAULT_SEEDED_WATCHLISTS[user.id];
-    const followsIssue = input.issueId ? wl?.issues.includes(input.issueId) : false;
-    const followsSector = input.sectorId ? wl?.sectors.includes(input.sectorId) : false;
-    const followsProject = input.projectId ? wl?.projects.includes(input.projectId) : false;
-
-    if (followsIssue || followsSector || followsProject) {
-      recipientIds.add(user.id);
-    }
-
-    // 2. Role & department responsibility targeting
-    if (input.targetRoles?.includes(user.role)) {
-      if (user.role === "official") {
-        if (!input.departmentId || user.departmentId === input.departmentId) {
-          recipientIds.add(user.id);
-        }
-      } else {
-        recipientIds.add(user.id);
-      }
-    }
-  }
-
-  let changed = false;
   const timestamp = input.at ?? DEMO_NOW;
 
-  for (const userId of recipientIds) {
-    if (input.excludeUserId && userId === input.excludeUserId) continue;
-    const bucket = ensureUserNotificationBucket(store, userId);
-    if (bucket.some((item) => item.dedupeKey === input.dedupeKey)) {
-      continue;
+  await updateGovernanceStore((store) => {
+    const recipientIds = new Set<string>(input.explicitUserIds ?? []);
+
+    for (const user of users) {
+      if (input.excludeUserId && user.id === input.excludeUserId) continue;
+
+      // 1. Direct watchlist interest
+      const wl = store.watchlists[user.id] ?? DEFAULT_SEEDED_WATCHLISTS[user.id];
+      const followsIssue = input.issueId ? wl?.issues.includes(input.issueId) : false;
+      const followsSector = input.sectorId ? wl?.sectors.includes(input.sectorId) : false;
+      const followsProject = input.projectId ? wl?.projects.includes(input.projectId) : false;
+
+      if (followsIssue || followsSector || followsProject) {
+        recipientIds.add(user.id);
+      }
+
+      // 2. Role & department responsibility targeting
+      if (input.targetRoles?.includes(user.role)) {
+        if (user.role === "official") {
+          if (!input.departmentId || user.departmentId === input.departmentId) {
+            recipientIds.add(user.id);
+          }
+        } else {
+          recipientIds.add(user.id);
+        }
+      }
     }
 
-    bucket.unshift({
-      id: `NTF-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-      dedupeKey: input.dedupeKey,
-      userId,
-      category: input.category,
-      title: input.title,
-      message: input.message,
-      href: input.href,
-      at: timestamp,
-      read: false,
-      ...(input.issueId ? { issueId: input.issueId } : {}),
-      ...(input.sectorId ? { sectorId: input.sectorId } : {}),
-      ...(input.projectId ? { projectId: input.projectId } : {}),
-    });
-    changed = true;
-  }
+    for (const userId of recipientIds) {
+      if (input.excludeUserId && userId === input.excludeUserId) continue;
+      const bucket = ensureUserNotificationBucket(store, userId);
+      if (bucket.some((item) => item.dedupeKey === input.dedupeKey)) {
+        continue;
+      }
 
-  if (changed) {
-    writeGovernanceStore(store);
-  }
+      bucket.unshift({
+        id: `NTF-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        dedupeKey: input.dedupeKey,
+        userId,
+        category: input.category,
+        title: input.title,
+        message: input.message,
+        href: input.href,
+        at: timestamp,
+        read: false,
+        ...(input.issueId ? { issueId: input.issueId } : {}),
+        ...(input.sectorId ? { sectorId: input.sectorId } : {}),
+        ...(input.projectId ? { projectId: input.projectId } : {}),
+      });
+    }
+  });
 }

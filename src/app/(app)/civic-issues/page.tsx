@@ -58,7 +58,7 @@ export default async function CivicIssuesPage({
   const allIssues = listIssues();
   const currentUser = await getCurrentUser();
   const watchlist = currentUser
-    ? getUserWatchlist(currentUser.id)
+    ? await getUserWatchlist(currentUser.id)
     : { issues: [], sectors: [], projects: [] };
 
   const statusParam = asString(params.status);

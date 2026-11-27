@@ -25,6 +25,17 @@ import { canUserPerform, isValidTransition, normalizeIssueStatus } from "./permi
 import { DEMO_NOW } from "./stats";
 
 /**
+ * TEMPORARY (persistence Part 2 → removed in Part 3): the governance store is
+ * async but this store's functions are not yet, so notifications are sent
+ * without waiting. Errors are logged instead of crashing the server.
+ */
+function notifyInBackground(input: Parameters<typeof dispatchAccountabilityNotifications>[0]): void {
+  dispatchAccountabilityNotifications(input).catch((error) => {
+    console.error("Notification dispatch failed:", error);
+  });
+}
+
+/**
  * Runtime civic issue, evidence verification, repair cycle, and accountability timeline store.
  *
  * Single source of truth consumed by Issue Management, Evidence Gallery, City Explorer,
@@ -954,7 +965,8 @@ export function createIssue(input: CreateIssueInput, author: PublicUser): Issue 
   store.evidence.push(...evidence);
   writeStore(store);
 
-  dispatchAccountabilityNotifications({
+  
+  notifyInBackground({
     dedupeKey: `issue_created:${issue.id}`,
     category: "new_issue",
     title: `New report ${issue.code} in ${issue.sectorId}`,
@@ -1092,7 +1104,7 @@ export function reviewIssue(
   };
 
   saveUpdatedIssue(updated);
-  dispatchAccountabilityNotifications({
+    notifyInBackground({
     dedupeKey: `review:${updated.id}:${updated.version}`,
     category: "status_update",
     title: `${updated.code} moved to Under Review`,
@@ -1243,7 +1255,7 @@ export function startOfficialRepair(
   };
 
   saveUpdatedIssue(updated);
-  dispatchAccountabilityNotifications({
+    notifyInBackground({
     dedupeKey: `official_response:${updated.id}:${updated.version}`,
     category: "official_response",
     title: `Official response posted on ${updated.code}`,
@@ -1327,7 +1339,7 @@ export function extendIssueDeadline(
   };
 
   saveUpdatedIssue(updated);
-  dispatchAccountabilityNotifications({
+    notifyInBackground({
     dedupeKey: `deadline_change:${updated.id}:${updated.version}`,
     category: "deadline_change",
     title: `Repair deadline revised on ${updated.code}`,
@@ -1470,7 +1482,8 @@ export function submitRepairCompletion(
   else store.overrides[updated.id] = updated;
   writeStore(store);
 
-  dispatchAccountabilityNotifications({
+  
+  notifyInBackground({
     dedupeKey: `repair_submitted:${updated.id}:${attemptNumber}`,
     category: "repair_submitted",
     title: `${updated.code} awaiting independent verification`,
@@ -1628,7 +1641,8 @@ export function inspectRepairSubmission(
   else store.overrides[updated.id] = updated;
   writeStore(store);
 
-  dispatchAccountabilityNotifications({
+  
+  notifyInBackground({
     dedupeKey: `inspection:${updated.id}:${updated.version}`,
     category:
       payload.decision === "approved" ? "verification_outcome" : "reopened_issue",
@@ -1734,7 +1748,8 @@ export function submitRecurrenceRequest(
   else store.overrides[updated.id] = updated;
   writeStore(store);
 
-  dispatchAccountabilityNotifications({
+  
+  notifyInBackground({
     dedupeKey: `recurrence_req:${updated.id}:${req.id}`,
     category: "status_update",
     title: `Recurrence request filed on ${updated.code}`,
@@ -1833,7 +1848,7 @@ export function reviewRecurrenceRequest(
   saveUpdatedIssue(updated);
 
   if (approved) {
-    dispatchAccountabilityNotifications({
+        notifyInBackground({
       dedupeKey: `recurrence_reopened:${updated.id}:${requestId}`,
       category: "reopened_issue",
       title: `${updated.code} reopened after recurrence review`,

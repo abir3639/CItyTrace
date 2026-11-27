@@ -10,7 +10,7 @@ export async function GET() {
   if (!user) {
     return NextResponse.json({ watchlist: { issues: [], sectors: [], projects: [] } });
   }
-  return NextResponse.json({ watchlist: getUserWatchlist(user.id) });
+  return NextResponse.json({ watchlist: await getUserWatchlist(user.id) });
 }
 
 export async function POST(request: Request) {
@@ -43,6 +43,6 @@ export async function POST(request: Request) {
     );
   }
 
-  const result = toggleWatchlistItem(user.id, entityType, entityId);
+  const result = await toggleWatchlistItem(user.id, entityType, entityId);
   return NextResponse.json(result, { status: 200 });
 }

@@ -136,7 +136,7 @@ export default async function OverviewPage({
   const allEvidence = listAllEvidence();
   const currentUser = await getCurrentUser();
   const watchlist = currentUser
-    ? getUserWatchlist(currentUser.id)
+    ? await getUserWatchlist(currentUser.id)
     : { issues: [], sectors: [], projects: [] };
   const demoEnabled = isDemoModeEnabled();
 

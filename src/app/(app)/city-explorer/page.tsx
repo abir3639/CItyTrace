@@ -41,7 +41,7 @@ export default async function CityExplorerPage({
   const features = toMapFeatures(issues, evidence);
   const currentUser = await getCurrentUser();
   const watchlist = currentUser
-    ? getUserWatchlist(currentUser.id)
+    ? await getUserWatchlist(currentUser.id)
     : { issues: [], sectors: [], projects: [] };
 
   return (

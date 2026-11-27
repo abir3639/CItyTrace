@@ -16,7 +16,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const currentUser = await getCurrentUser();
   const searchIssues = issues.map(toSearchIssue);
   const recentEvents = getActivitySince(14, 8, issues);
-  const userNotifications = currentUser ? getUserNotifications(currentUser.id) : [];
+  const userNotifications = currentUser ? await getUserNotifications(currentUser.id) : [];
   const demoEnabled = isDemoModeEnabled();
 
   return (

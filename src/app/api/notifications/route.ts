@@ -11,7 +11,7 @@ export async function GET() {
   if (!user) {
     return NextResponse.json({ notifications: [] });
   }
-  return NextResponse.json({ notifications: getUserNotifications(user.id) });
+  return NextResponse.json({ notifications: await getUserNotifications(user.id) });
 }
 
 export async function PATCH(request: Request) {
@@ -28,7 +28,7 @@ export async function PATCH(request: Request) {
   }
 
   if (body.all === true) {
-    return NextResponse.json({ notifications: markAllNotificationsRead(user.id) });
+    return NextResponse.json({ notifications: await markAllNotificationsRead(user.id) });
   }
 
   const notificationId =
@@ -41,6 +41,6 @@ export async function PATCH(request: Request) {
   }
 
   return NextResponse.json({
-    notifications: markNotificationRead(user.id, notificationId),
+    notifications: await markNotificationRead(user.id, notificationId),
   });
 }

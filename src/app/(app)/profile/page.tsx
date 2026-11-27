@@ -118,7 +118,7 @@ export default async function ProfilePage() {
   const issues = listIssues();
   const sector = getSector(user.sectorId);
   const dept = getDepartment(user.departmentId);
-  const watchlist = getUserWatchlist(user.id);
+  const watchlist = await getUserWatchlist(user.id);
   const canReport = canUserPerform(user, "report_issue").allowed;
   const followedIssues = issues.filter((i) => watchlist.issues.includes(i.id));
   const followedProjects = PROJECTS.filter((p) => watchlist.projects.includes(p.id));

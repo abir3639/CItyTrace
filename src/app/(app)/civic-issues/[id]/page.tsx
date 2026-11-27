@@ -73,7 +73,7 @@ export default async function IssueDetailPage({
   const currentUser = await getCurrentUser();
   const demoEnabled = isDemoModeEnabled();
   const watchlist = currentUser
-    ? getUserWatchlist(currentUser.id)
+    ? await getUserWatchlist(currentUser.id)
     : { issues: [], sectors: [], projects: [] };
   const isFollowing = watchlist.issues.includes(issue.id);
 
