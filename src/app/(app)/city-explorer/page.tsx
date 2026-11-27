@@ -36,8 +36,8 @@ export default async function CityExplorerPage({
     ? (rawMode as CityRenderMode)
     : "twin";
 
-  const issues = listIssues();
-  const evidence = listAllEvidence();
+  const issues = await listIssues();
+  const evidence = await listAllEvidence();
   const features = toMapFeatures(issues, evidence);
   const currentUser = await getCurrentUser();
   const watchlist = currentUser

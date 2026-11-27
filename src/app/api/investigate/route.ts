@@ -80,8 +80,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON request body." }, { status: 400 });
   }
 
-  const issues = listIssues();
-  const allEvidence = listAllEvidence();
+  const issues = await listIssues();
+  const allEvidence = await listAllEvidence();
 
   const baseline = analyzeProject(projectId, issues, allEvidence);
   if (!baseline) {

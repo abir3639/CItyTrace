@@ -24,7 +24,13 @@ export const supabase =
     ? createClient(url, serviceKey, { auth: { persistSession: false } })
     : null;
 
-const MAX_SAVE_ATTEMPTS = 5;
+const MAX_SAVE_ATTEMPTS = 10;
+
+/** Short random pause before a retry, growing with each attempt, so colliding requests spread out. */
+function backoff(attempt: number): Promise<void> {
+  const ms = Math.min(400, 15 * 2 ** attempt) * (0.5 + Math.random());
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 function localFile(key: string): string {
   return path.join(os.tmpdir(), `citytrace-runtime-${key}.json`);
@@ -83,8 +89,13 @@ export async function updateState<T, R>(
   mutate: (store: T) => R
 ): Promise<R> {
   for (let attempt = 0; attempt < MAX_SAVE_ATTEMPTS; attempt += 1) {
+    if (attempt > 0) await backoff(attempt);
     const { data, version } = await load(key, empty);
+    const before = JSON.stringify(data);
     const result = mutate(data);
+
+    // Nothing changed (e.g. a forbidden or not-found request): skip the save.
+    if (JSON.stringify(data) === before) return result;
 
     if (!supabase) {
       fs.writeFileSync(localFile(key), JSON.stringify(data, null, 2), "utf8");

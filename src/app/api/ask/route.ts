@@ -48,8 +48,8 @@ export async function POST(request: Request) {
     );
   }
 
-  const issues = listIssues();
-  const allEvidence = listAllEvidence();
+  const issues = await listIssues();
+  const allEvidence = await listAllEvidence();
   const baseline = answerQuestion(question, issues, allEvidence);
 
   const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;

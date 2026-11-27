@@ -115,7 +115,7 @@ export default async function ProfilePage() {
     );
   }
 
-  const issues = listIssues();
+  const issues = await listIssues();
   const sector = getSector(user.sectorId);
   const dept = getDepartment(user.departmentId);
   const watchlist = await getUserWatchlist(user.id);

@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
  * notifications, and live issue list so the shell updates immediately.
  */
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const issues = listIssues();
+  const issues = await listIssues();
   const currentUser = await getCurrentUser();
   const searchIssues = issues.map(toSearchIssue);
   const recentEvents = getActivitySince(14, 8, issues);

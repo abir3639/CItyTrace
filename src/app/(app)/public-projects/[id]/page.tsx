@@ -84,8 +84,8 @@ export default async function ProjectDetailPage({
   const isFollowing = watchlist.projects.includes(project.id);
 
   const sector = getSector(project.sectorId);
-  const allIssues = listIssues();
-  const allEvidence = listAllEvidence();
+  const allIssues = await listIssues();
+  const allEvidence = await listAllEvidence();
   const evidenceMap = new Map(allEvidence.map((item) => [item.id, item]));
   const evidence = project.evidenceIds
     .map((eid) => evidenceMap.get(eid))

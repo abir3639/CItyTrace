@@ -47,9 +47,9 @@ export const metadata: Metadata = {
   title: "Money Tracker · CityTrace",
 };
 
-export default function MoneyTrackerPage() {
-  const issues = listIssues();
-  const evidence = listAllEvidence();
+export default async function MoneyTrackerPage() {
+  const issues = await listIssues();
+  const evidence = await listAllEvidence();
 
   const totals = getBudgetTotals(PROJECTS);
   const missingVerification = PROJECTS.filter(

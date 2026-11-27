@@ -35,7 +35,7 @@ export async function POST(
   }
 
   const reason = typeof body.reason === "string" ? body.reason : "";
-  const result = moderateEvidence(id, user, { action, reason });
+  const result = await moderateEvidence(id, user, { action, reason });
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: result.status });
   }

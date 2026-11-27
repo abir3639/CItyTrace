@@ -132,8 +132,8 @@ export default async function OverviewPage({
 
   const hasFilters = period !== "all" || Boolean(sectorId) || Boolean(category);
 
-  const allIssues = listIssues();
-  const allEvidence = listAllEvidence();
+  const allIssues = await listIssues();
+  const allEvidence = await listAllEvidence();
   const currentUser = await getCurrentUser();
   const watchlist = currentUser
     ? await getUserWatchlist(currentUser.id)

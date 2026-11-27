@@ -34,7 +34,7 @@ export async function PATCH(
   }
 
   const { id } = await context.params;
-  if (!findIssue(id)) {
+  if (!(await findIssue(id))) {
     return NextResponse.json({ error: `Unknown issue "${id}".` }, { status: 404 });
   }
 
@@ -51,7 +51,7 @@ export async function PATCH(
     typeof body.expectedVersion === "number" ? body.expectedVersion : undefined;
 
   if (action === "confirm") {
-    const result = confirmIssue(id, user, note);
+    const result = await confirmIssue(id, user, note);
     if (!result) {
       return NextResponse.json({ error: "Could not confirm the issue." }, { status: 500 });
     }
@@ -68,7 +68,7 @@ export async function PATCH(
   }
 
   if (action === "unconfirm") {
-    const updated = unconfirmIssue(id, user);
+    const updated = await unconfirmIssue(id, user);
     if (!updated) {
       return NextResponse.json({ error: "Could not withdraw confirmation." }, { status: 500 });
     }
@@ -76,7 +76,7 @@ export async function PATCH(
   }
 
   if (action === "review") {
-    const result = reviewIssue(id, user, note, expectedVersion);
+    const result = await reviewIssue(id, user, note, expectedVersion);
     if (!result.ok) {
       return NextResponse.json({ error: result.error }, { status: result.status });
     }
@@ -84,7 +84,7 @@ export async function PATCH(
   }
 
   if (action === "start_repair") {
-    const result = startOfficialRepair(id, user, {
+    const result = await startOfficialRepair(id, user, {
       departmentId: typeof body.departmentId === "string" ? body.departmentId : "",
       assignedTeam: typeof body.assignedTeam === "string" ? body.assignedTeam : undefined,
       officialResponse:
@@ -102,7 +102,7 @@ export async function PATCH(
   }
 
   if (action === "extend_deadline") {
-    const result = extendIssueDeadline(id, user, {
+    const result = await extendIssueDeadline(id, user, {
       newDate: typeof body.newDate === "string" ? body.newDate : "",
       reason: typeof body.reason === "string" ? body.reason : "",
       expectedVersion,
@@ -114,7 +114,7 @@ export async function PATCH(
   }
 
   if (action === "submit_repair") {
-    const result = submitRepairCompletion(id, user, {
+    const result = await submitRepairCompletion(id, user, {
       resolutionNotes:
         typeof body.resolutionNotes === "string" ? body.resolutionNotes : "",
       completionDate: typeof body.completionDate === "string" ? body.completionDate : "",
@@ -142,7 +142,7 @@ export async function PATCH(
         { status: 422 }
       );
     }
-    const result = inspectRepairSubmission(id, user, {
+    const result = await inspectRepairSubmission(id, user, {
       decision,
       notes: typeof body.notes === "string" ? body.notes : "",
       evidenceTitle: typeof body.evidenceTitle === "string" ? body.evidenceTitle : undefined,
@@ -156,7 +156,7 @@ export async function PATCH(
   }
 
   if (action === "submit_recurrence") {
-    const result = submitRecurrenceRequest(id, user, {
+    const result = await submitRecurrenceRequest(id, user, {
       reason: typeof body.reason === "string" ? body.reason : "",
       photoDataUrl: validPhoto(body.photoDataUrl),
       expectedVersion,
@@ -179,7 +179,7 @@ export async function PATCH(
         { status: 422 }
       );
     }
-    const result = reviewRecurrenceRequest(id, requestId, user, {
+    const result = await reviewRecurrenceRequest(id, requestId, user, {
       decision,
       reviewNotes: typeof body.reviewNotes === "string" ? body.reviewNotes : "",
       expectedVersion,

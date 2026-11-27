@@ -28,8 +28,8 @@ export default async function AiInvestigationPage({
     typeof params.project === "string" && params.project.length > 0 ? params.project : null;
   const initialProjectId = requested && projectsById.has(requested) ? requested : null;
 
-  const issues = listIssues();
-  const allEvidence = listAllEvidence();
+  const issues = await listIssues();
+  const allEvidence = await listAllEvidence();
   const findings = findAnomalies(issues, allEvidence);
   const summary = summariseAnomalies(findings);
   const initialReport = initialProjectId

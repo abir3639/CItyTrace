@@ -1,6 +1,3 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import { EVIDENCE, ISSUES, PROJECTS, SECTORS } from "@/data";
 import type {
   AccountabilityEvent,
@@ -24,19 +21,9 @@ import {
   dispatchAccountabilityNotifications,
   type DispatchNotificationInput,
 } from "./governance-store";
+import { readState, updateState } from "./db";
 import { canUserPerform, isValidTransition, normalizeIssueStatus } from "./permissions";
 import { DEMO_NOW } from "./stats";
-
-/**
- * TEMPORARY (persistence Part 2 → removed in Part 3): the governance store is
- * async but this store's functions are not yet, so notifications are sent
- * without waiting. Errors are logged instead of crashing the server.
- */
-function notifyInBackground(input: DispatchNotificationInput): void {
-  dispatchAccountabilityNotifications(input).catch((error) => {
-    console.error("Notification dispatch failed:", error);
-  });
-}
 
 /**
  * Runtime civic issue, evidence verification, repair cycle, and accountability timeline store.
@@ -44,13 +31,14 @@ function notifyInBackground(input: DispatchNotificationInput): void {
  * Single source of truth consumed by Issue Management, Evidence Gallery, City Explorer,
  * Money Tracker, AI Investigation, Role Action Centres, and Notifications.
  *
- * Persisted in OS temp directory (`citytrace-runtime-issues.json`) and cleared
- * cleanly via `npm run reset:demo`.
+ * Persisted as the `issues` row of the Supabase `app_state` table (see `./db`),
+ * or in the OS temp directory when Supabase is not configured. Cleared via
+ * `npm run reset:demo`.
  *
  * Server-only — never import this from a client component.
  */
 
-const STORE_FILE = path.join(os.tmpdir(), "citytrace-runtime-issues.json");
+const STORE_KEY = "issues";
 
 interface StoreShape {
   created: Issue[];
@@ -59,27 +47,26 @@ interface StoreShape {
   evidenceOverrides: Record<string, Evidence>;
 }
 
-function readStore(): StoreShape {
-  try {
-    const raw = fs.readFileSync(STORE_FILE, "utf8");
-    const parsed = JSON.parse(raw) as Partial<StoreShape>;
-    return {
-      created: Array.isArray(parsed.created) ? parsed.created : [],
-      overrides:
-        parsed.overrides && typeof parsed.overrides === "object" ? parsed.overrides : {},
-      evidence: Array.isArray(parsed.evidence) ? parsed.evidence : [],
-      evidenceOverrides:
-        parsed.evidenceOverrides && typeof parsed.evidenceOverrides === "object"
-          ? parsed.evidenceOverrides
-          : {},
-    };
-  } catch {
-    return { created: [], overrides: {}, evidence: [], evidenceOverrides: {} };
-  }
+function emptyStore(): StoreShape {
+  return { created: [], overrides: {}, evidence: [], evidenceOverrides: {} };
 }
 
-function writeStore(store: StoreShape): void {
-  fs.writeFileSync(STORE_FILE, JSON.stringify(store, null, 2), "utf8");
+/**
+ * Repairs a stored value in place so every field has the right shape. Works in
+ * place (rather than returning a copy) so changes made inside `updateState` are saved.
+ */
+function normalizeStore(raw: Partial<StoreShape>): StoreShape {
+  if (!Array.isArray(raw.created)) raw.created = [];
+  if (!raw.overrides || typeof raw.overrides !== "object") raw.overrides = {};
+  if (!Array.isArray(raw.evidence)) raw.evidence = [];
+  if (!raw.evidenceOverrides || typeof raw.evidenceOverrides !== "object") {
+    raw.evidenceOverrides = {};
+  }
+  return raw as StoreShape;
+}
+
+async function readStore(): Promise<StoreShape> {
+  return normalizeStore(await readState<Partial<StoreShape>>(STORE_KEY, emptyStore()));
 }
 
 function hashText(value: string): number {
@@ -628,34 +615,34 @@ function nextIssueIdFrom(store: StoreShape): string {
   return `ISS-${String(index).padStart(3, "0")}`;
 }
 
-export function listIssues(): Issue[] {
-  return issuesFrom(readStore());
+export async function listIssues(): Promise<Issue[]> {
+  return issuesFrom(await readStore());
 }
 
-export function findIssue(id: string): Issue | undefined {
-  return findIssueIn(readStore(), id);
+export async function findIssue(id: string): Promise<Issue | undefined> {
+  return findIssueIn(await readStore(), id);
 }
 
-export function listAllEvidence(): Evidence[] {
-  return evidenceFrom(readStore());
+export async function listAllEvidence(): Promise<Evidence[]> {
+  return evidenceFrom(await readStore());
 }
 
-export function findRuntimeEvidence(id: string): Evidence | undefined {
-  return findEvidenceIn(readStore(), id);
+export async function findRuntimeEvidence(id: string): Promise<Evidence | undefined> {
+  return findEvidenceIn(await readStore(), id);
 }
 
-export function listRuntimeEvidence(): Evidence[] {
-  return readStore().evidence;
+export async function listRuntimeEvidence(): Promise<Evidence[]> {
+  return (await readStore()).evidence;
 }
 
-export function issuesAtLocation(locationKey: string): Issue[] {
-  return listIssues()
+export async function issuesAtLocation(locationKey: string): Promise<Issue[]> {
+  return (await listIssues())
     .filter((issue) => issue.locationKey === locationKey)
     .sort((a, b) => a.reportedAt.localeCompare(b.reportedAt));
 }
 
-export function nextIssueId(): string {
-  return nextIssueIdFrom(readStore());
+export async function nextIssueId(): Promise<string> {
+  return nextIssueIdFrom(await readStore());
 }
 
 /* ------------------------------------------------------------------ */
@@ -663,22 +650,31 @@ export function nextIssueId(): string {
 /* ------------------------------------------------------------------ */
 
 /**
- * Runs one save: reads the store once, lets `mutate` change it and queue
- * notifications, saves (only if something changed), then sends the queued
- * notifications. Every save function goes through here.
+ * Runs one save: reads the store, lets `mutate` change it and queue
+ * notifications, saves it, then sends the queued notifications. Every save
+ * function goes through here.
+ *
+ * If another request saved in between, `updateState` reloads and runs `mutate`
+ * again on the fresh copy, so `mutate` must only change `store` and push to
+ * `notices` (a fresh list per attempt) — no other side effects.
  */
-function withIssueStore<R>(
+async function withIssueStore<R>(
   mutate: (store: StoreShape, notices: DispatchNotificationInput[]) => R
-): R {
-  const store = readStore();
-  const before = JSON.stringify(store);
-  const notices: DispatchNotificationInput[] = [];
-  const result = mutate(store, notices);
-  if (JSON.stringify(store) !== before) {
-    writeStore(store);
-  }
+): Promise<R> {
+  let notices: DispatchNotificationInput[] = [];
+  const result = await updateState<Partial<StoreShape>, R>(STORE_KEY, emptyStore(), (raw) => {
+    notices = [];
+    return mutate(normalizeStore(raw), notices);
+  });
+  // The change itself is already saved. A notification that fails to save is
+  // logged rather than failing the request, so a citizen never sees an error
+  // for a report that was in fact recorded.
   for (const notice of notices) {
-    notifyInBackground(notice);
+    try {
+      await dispatchAccountabilityNotifications(notice);
+    } catch (error) {
+      console.error(`Notification "${notice.dedupeKey}" could not be saved:`, error);
+    }
   }
   return result;
 }
@@ -886,7 +882,7 @@ export interface CreateIssueInput {
   photoDataUrl?: string;
 }
 
-export function createIssue(input: CreateIssueInput, author: PublicUser): Issue {
+export async function createIssue(input: CreateIssueInput, author: PublicUser): Promise<Issue> {
   return withIssueStore<Issue>((store, notices) => {
     const id = nextIssueIdFrom(store);
     const code = `CT-ISS-${id.split("-")[1]}`;
@@ -1027,11 +1023,11 @@ export function createIssue(input: CreateIssueInput, author: PublicUser): Issue 
   });
 }
 
-export function confirmIssue(
+export async function confirmIssue(
   id: string,
   user: PublicUser,
   note?: string
-): { issue: Issue; alreadyVoted: boolean; forbidden?: string } | null {
+): Promise<{ issue: Issue; alreadyVoted: boolean; forbidden?: string } | null> {
   return withIssueStore<{ issue: Issue; alreadyVoted: boolean; forbidden?: string } | null>((store, notices) => {
     const base = findIssueIn(store, id);
     if (!base) return null;
@@ -1079,7 +1075,7 @@ export function confirmIssue(
   });
 }
 
-export function unconfirmIssue(id: string, user: PublicUser): Issue | null {
+export async function unconfirmIssue(id: string, user: PublicUser): Promise<Issue | null> {
   return withIssueStore<Issue | null>((store, notices) => {
     const base = findIssueIn(store, id);
     if (!base) return null;
@@ -1104,12 +1100,12 @@ export function unconfirmIssue(id: string, user: PublicUser): Issue | null {
 }
 
 /** Reported -> Under Review (Verifier only). */
-export function reviewIssue(
+export async function reviewIssue(
   id: string,
   user: PublicUser,
   note?: string,
   expectedVersion?: number
-): IssueMutationSuccess | MutationError {
+): Promise<IssueMutationSuccess | MutationError> {
   return withIssueStore<IssueMutationSuccess | MutationError>((store, notices) => {
     const base = findIssueIn(store, id);
     if (!base) return { ok: false, status: 404, error: `Unknown issue "${id}".` };
@@ -1172,7 +1168,7 @@ export function reviewIssue(
 }
 
 /** Under Review | Reopened -> In Progress (Authorized Department Official). */
-export function startOfficialRepair(
+export async function startOfficialRepair(
   id: string,
   user: PublicUser,
   payload: {
@@ -1184,7 +1180,7 @@ export function startOfficialRepair(
     estimatedRepairDate: string;
     expectedVersion?: number;
   }
-): IssueMutationSuccess | MutationError {
+): Promise<IssueMutationSuccess | MutationError> {
   return withIssueStore<IssueMutationSuccess | MutationError>((store, notices) => {
     const base = findIssueIn(store, id);
     if (!base) return { ok: false, status: 404, error: `Unknown issue "${id}".` };
@@ -1324,7 +1320,7 @@ export function startOfficialRepair(
 }
 
 /** Update repair deadline with mandatory reason while preserving historical SLA breaches. */
-export function extendIssueDeadline(
+export async function extendIssueDeadline(
   id: string,
   user: PublicUser,
   payload: {
@@ -1332,7 +1328,7 @@ export function extendIssueDeadline(
     reason: string;
     expectedVersion?: number;
   }
-): IssueMutationSuccess | MutationError {
+): Promise<IssueMutationSuccess | MutationError> {
   return withIssueStore<IssueMutationSuccess | MutationError>((store, notices) => {
     const base = findIssueIn(store, id);
     if (!base) return { ok: false, status: 404, error: `Unknown issue "${id}".` };
@@ -1409,7 +1405,7 @@ export function extendIssueDeadline(
 }
 
 /** In Progress -> Awaiting Verification (Official submits completed repair + mandatory evidence). */
-export function submitRepairCompletion(
+export async function submitRepairCompletion(
   id: string,
   user: PublicUser,
   payload: {
@@ -1421,7 +1417,7 @@ export function submitRepairCompletion(
     photoDataUrl?: string;
     expectedVersion?: number;
   }
-): IssueMutationSuccess | MutationError {
+): Promise<IssueMutationSuccess | MutationError> {
   return withIssueStore<IssueMutationSuccess | MutationError>((store, notices) => {
     const base = findIssueIn(store, id);
     if (!base) return { ok: false, status: 404, error: `Unknown issue "${id}".` };
@@ -1554,7 +1550,7 @@ export function submitRepairCompletion(
 }
 
 /** Awaiting Verification -> Resolved (Approved) or Reopened (Rejected) — Verifier only. */
-export function inspectRepairSubmission(
+export async function inspectRepairSubmission(
   id: string,
   user: PublicUser,
   payload: {
@@ -1564,7 +1560,7 @@ export function inspectRepairSubmission(
     photoDataUrl?: string;
     expectedVersion?: number;
   }
-): IssueMutationSuccess | MutationError {
+): Promise<IssueMutationSuccess | MutationError> {
   return withIssueStore<IssueMutationSuccess | MutationError>((store, notices) => {
     const base = findIssueIn(store, id);
     if (!base) return { ok: false, status: 404, error: `Unknown issue "${id}".` };
@@ -1720,7 +1716,7 @@ export function inspectRepairSubmission(
 }
 
 /** Citizen / Verifier submits recurrence request against a Resolved issue without mutating official status yet. */
-export function submitRecurrenceRequest(
+export async function submitRecurrenceRequest(
   id: string,
   user: PublicUser,
   payload: {
@@ -1728,7 +1724,7 @@ export function submitRecurrenceRequest(
     photoDataUrl?: string;
     expectedVersion?: number;
   }
-): IssueMutationSuccess | MutationError {
+): Promise<IssueMutationSuccess | MutationError> {
   return withIssueStore<IssueMutationSuccess | MutationError>((store, notices) => {
     const base = findIssueIn(store, id);
     if (!base) return { ok: false, status: 404, error: `Unknown issue "${id}".` };
@@ -1820,7 +1816,7 @@ export function submitRecurrenceRequest(
 }
 
 /** Verifier approves (reopening issue) or rejects a pending recurrence request. */
-export function reviewRecurrenceRequest(
+export async function reviewRecurrenceRequest(
   id: string,
   requestId: string,
   user: PublicUser,
@@ -1829,7 +1825,7 @@ export function reviewRecurrenceRequest(
     reviewNotes: string;
     expectedVersion?: number;
   }
-): IssueMutationSuccess | MutationError {
+): Promise<IssueMutationSuccess | MutationError> {
   return withIssueStore<IssueMutationSuccess | MutationError>((store, notices) => {
     const base = findIssueIn(store, id);
     if (!base) return { ok: false, status: 404, error: `Unknown issue "${id}".` };
@@ -1924,14 +1920,14 @@ export function reviewRecurrenceRequest(
 }
 
 /** Verifier verifies, flags, or revokes verification of an Evidence item (no self-verification!). */
-export function moderateEvidence(
+export async function moderateEvidence(
   evidenceId: string,
   user: PublicUser,
   payload: {
     action: "verified" | "flagged" | "revoked";
     reason: string;
   }
-): { ok: true; evidence: Evidence } | MutationError {
+): Promise<{ ok: true; evidence: Evidence } | MutationError> {
   return withIssueStore<{ ok: true; evidence: Evidence } | MutationError>((store, notices) => {
     const existing = findEvidenceIn(store, evidenceId);
     if (!existing) {

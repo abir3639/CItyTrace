@@ -92,7 +92,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Validation failed.", fields: errors }, { status: 422 });
   }
 
-  const issue = createIssue(
+  const issue = await createIssue(
     {
       title,
       category,

@@ -54,7 +54,7 @@ export async function generateMetadata({
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
   const { id } = await params;
-  const issue = findIssue(id);
+  const issue = await findIssue(id);
   return {
     title: issue ? `${issue.code} · Civic Issues · CityTrace` : "Issue not found · CityTrace",
   };
@@ -66,7 +66,7 @@ export default async function IssueDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const issue = findIssue(id);
+  const issue = await findIssue(id);
 
   if (!issue) notFound();
 
@@ -82,12 +82,12 @@ export default async function IssueDetailPage({
   const sla = deriveIssueSla(issue);
   const project = issue.projectId ? getProject(issue.projectId) : undefined;
 
-  const allEvidenceMap = new Map(listAllEvidence().map((item) => [item.id, item]));
+  const allEvidenceMap = new Map((await listAllEvidence()).map((item) => [item.id, item]));
   const evidence: Evidence[] = issue.evidenceIds
     .map((evidenceId) => allEvidenceMap.get(evidenceId))
     .filter((item): item is Evidence => item !== undefined);
 
-  const allAtLocation = runtimeIssuesAtLocation(issue.locationKey);
+  const allAtLocation = await runtimeIssuesAtLocation(issue.locationKey);
   const atLocation =
     allAtLocation.length > 0 ? allAtLocation : seedIssuesAtLocation(issue.locationKey);
   const others = atLocation.filter((item) => item.id !== issue.id);

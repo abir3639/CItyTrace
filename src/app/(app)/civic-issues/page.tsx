@@ -55,7 +55,7 @@ export default async function CivicIssuesPage({
   searchParams: Promise<SearchParams>;
 }) {
   const params = await searchParams;
-  const allIssues = listIssues();
+  const allIssues = await listIssues();
   const currentUser = await getCurrentUser();
   const watchlist = currentUser
     ? await getUserWatchlist(currentUser.id)
