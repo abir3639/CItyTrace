@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { ArrowRight, Loader2, Lock, LogIn } from "lucide-react";
 import { USER_ROLE_LABELS, type UserRole } from "@/types/citytrace";
 import { getDepartment } from "@/lib/departments";
@@ -36,7 +35,6 @@ export default function PermissionLockBanner({
   loginNext?: string;
   isGuest?: boolean;
 }) {
-  const router = useRouter();
   const [switching, setSwitching] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -63,7 +61,7 @@ export default function PermissionLockBanner({
         setError(payload.error ?? "Demo switch unavailable.");
         return;
       }
-      router.refresh();
+      window.location.reload();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Network error.");
     } finally {

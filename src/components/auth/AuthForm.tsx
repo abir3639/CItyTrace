@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import {
   AlertCircle,
   ArrowRight,
@@ -114,7 +113,6 @@ export default function AuthForm({
   initialNext?: string;
   currentUser: PublicUser | null;
 }) {
-  const router = useRouter();
   const nextHref = safeNextPath(initialNext, mode === "register" ? "/profile" : "/");
   const nextQuery = initialNext ? `?next=${encodeURIComponent(safeNextPath(initialNext))}` : "";
 
@@ -219,8 +217,7 @@ export default function AuthForm({
         return;
       }
 
-      router.push(nextHref);
-      router.refresh();
+      window.location.assign(nextHref);
     } catch (caught) {
       setFormError(caught instanceof Error ? caught.message : "Network error.");
     } finally {
@@ -243,8 +240,7 @@ export default function AuthForm({
         setFormError(payload.error ?? "Demo sign-in failed.");
         return;
       }
-      router.push(safeNextPath(initialNext, "/"));
-      router.refresh();
+      window.location.assign(safeNextPath(initialNext, "/"));
     } catch (caught) {
       setFormError(caught instanceof Error ? caught.message : "Network error.");
     } finally {

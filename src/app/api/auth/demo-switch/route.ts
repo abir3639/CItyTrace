@@ -5,7 +5,10 @@ import {
   cookieOptionsForRequest,
   createSession,
   isDemoModeEnabled,
+  noStoreHeaders,
 } from "@/lib/auth-store";
+
+export const dynamic = "force-dynamic";
 
 /**
  * Isolated demonstration role switcher.
@@ -15,7 +18,7 @@ export async function POST(request: Request) {
   if (!isDemoModeEnabled()) {
     return NextResponse.json(
       { error: "Demo role switching is disabled in this environment." },
-      { status: 403 }
+      { status: 403, headers: noStoreHeaders() }
     );
   }
 
@@ -23,7 +26,10 @@ export async function POST(request: Request) {
   try {
     body = (await request.json()) as { userId?: unknown };
   } catch {
-    return NextResponse.json({ error: "Invalid JSON request body." }, { status: 400 });
+    return NextResponse.json(
+      { error: "Invalid JSON request body." },
+      { status: 400, headers: noStoreHeaders() }
+    );
   }
 
   const userId = typeof body.userId === "string" ? body.userId.trim() : "";
@@ -31,12 +37,15 @@ export async function POST(request: Request) {
   if (!demoUser) {
     return NextResponse.json(
       { error: "Only pre-seeded demonstration identities can be switched to." },
-      { status: 403 }
+      { status: 403, headers: noStoreHeaders() }
     );
   }
 
-  const token = createSession(demoUser.id);
-  const response = NextResponse.json({ user: demoUser }, { status: 200 });
+  const token = createSession(demoUser);
+  const response = NextResponse.json(
+    { user: demoUser },
+    { status: 200, headers: noStoreHeaders() }
+  );
   response.cookies.set(SESSION_COOKIE, token, cookieOptionsForRequest(request));
   return response;
 }

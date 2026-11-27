@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { Loader2, LogOut } from "lucide-react";
 
 export default function SignOutButton({
@@ -15,7 +14,6 @@ export default function SignOutButton({
   label?: string;
   onSignedOut?: () => void;
 }) {
-  const router = useRouter();
   const [busy, setBusy] = useState(false);
 
   const handleSignOut = async () => {
@@ -24,9 +22,10 @@ export default function SignOutButton({
       await fetch("/api/auth/logout", { method: "POST" });
       onSignedOut?.();
       if (redirectTo) {
-        router.push(redirectTo);
+        window.location.assign(redirectTo);
+      } else {
+        window.location.reload();
       }
-      router.refresh();
     } finally {
       setBusy(false);
     }

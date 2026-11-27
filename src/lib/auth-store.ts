@@ -19,9 +19,12 @@ import { DEMO_NOW } from "./stats";
  */
 
 export const SESSION_COOKIE = "ct_session";
+export const REGISTERED_USERS_COOKIE = "ct_reg";
 
 const AUTH_STORE_FILE = path.join(os.tmpdir(), "citytrace-runtime-auth.json");
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 14;
+const REGISTERED_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
+const DEFAULT_STATELESS_SECRET = "citytrace-dhaka-civic-demo-session-key-v2";
 const AVATAR_PALETTE = [
   "#007AFF",
   "#34C759",
@@ -224,7 +227,65 @@ function readAuthStore(): AuthStoreShape {
 }
 
 function writeAuthStore(store: AuthStoreShape): void {
-  fs.writeFileSync(AUTH_STORE_FILE, JSON.stringify(store, null, 2), "utf8");
+  try {
+    fs.writeFileSync(AUTH_STORE_FILE, JSON.stringify(store, null, 2), "utf8");
+  } catch {
+    // Best-effort local persistence; stateless signed cookies carry sessions on serverless hosts.
+  }
+}
+
+function getSessionSecret(): string {
+  return (
+    process.env.CITYTRACE_AUTH_SECRET ||
+    process.env.AUTH_SECRET ||
+    DEFAULT_STATELESS_SECRET
+  );
+}
+
+function signToken(prefix: string, payload: unknown): string {
+  const encoded = Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
+  const signingInput = `${prefix}.${encoded}`;
+  const sig = crypto
+    .createHmac("sha256", getSessionSecret())
+    .update(signingInput)
+    .digest("base64url");
+  return `${signingInput}.${sig}`;
+}
+
+function verifyToken<T>(token: string, expectedPrefix: string): T | null {
+  if (!token || typeof token !== "string") return null;
+  const parts = token.split(".");
+  if (parts.length !== 3) return null;
+  const [prefix, encoded, sig] = parts;
+  if (prefix !== expectedPrefix || !encoded || !sig) return null;
+
+  try {
+    const expectedSig = crypto
+      .createHmac("sha256", getSessionSecret())
+      .update(`${prefix}.${encoded}`)
+      .digest();
+    const actualSig = Buffer.from(sig, "base64url");
+    if (actualSig.length !== expectedSig.length) return null;
+    if (!crypto.timingSafeEqual(actualSig, expectedSig)) return null;
+    return JSON.parse(Buffer.from(encoded, "base64url").toString("utf8")) as T;
+  } catch {
+    return null;
+  }
+}
+
+function isValidPublicUser(raw: unknown): raw is PublicUser {
+  if (!raw || typeof raw !== "object") return false;
+  const u = raw as Record<string, unknown>;
+  return (
+    typeof u.id === "string" &&
+    typeof u.name === "string" &&
+    typeof u.email === "string" &&
+    (u.role === "citizen" || u.role === "verifier" || u.role === "official") &&
+    typeof u.sectorId === "string" &&
+    typeof u.initials === "string" &&
+    typeof u.avatarColor === "string" &&
+    typeof u.joinedAt === "string"
+  );
 }
 
 export function listPublicUsers(): PublicUser[] {
@@ -244,7 +305,7 @@ export function registerUser(input: {
   sectorId: string;
   departmentId?: string;
 }):
-  | { ok: true; user: PublicUser }
+  | { ok: true; user: PublicUser; storedUser: StoredUser }
   | { ok: false; error: string; field?: string; status: number } {
   const name = input.name.trim().replace(/\s+/g, " ");
   const email = input.email.trim().toLowerCase();
@@ -319,44 +380,138 @@ export function registerUser(input: {
   store.users.push(created);
   writeAuthStore(store);
 
-  return { ok: true, user: toPublicUser(created) };
+  return { ok: true, user: toPublicUser(created), storedUser: created };
+}
+
+export function buildRegisteredUsersCookie(
+  existingCookie: string | undefined,
+  createdUser: StoredUser
+): string {
+  const seededEmails = new Set(
+    SEEDED_STORED_USERS.map((u) => u.email.toLowerCase())
+  );
+  const parsed = existingCookie
+    ? verifyToken<{ users?: unknown[] }>(existingCookie, "reg1")
+    : null;
+  const existingUsers: StoredUser[] = Array.isArray(parsed?.users)
+    ? (parsed.users.filter(
+        (u): u is StoredUser =>
+          isValidPublicUser(u) &&
+          typeof (u as StoredUser).passwordHash === "string" &&
+          !seededEmails.has((u as StoredUser).email.toLowerCase()) &&
+          (u as StoredUser).email.toLowerCase() !==
+            createdUser.email.toLowerCase()
+      ) as StoredUser[])
+    : [];
+
+  return signToken("reg1", {
+    users: [...existingUsers, createdUser].slice(-3),
+  });
+}
+
+export function registeredUsersCookieOptions(request: Request) {
+  return {
+    ...cookieOptionsForRequest(request),
+    maxAge: REGISTERED_COOKIE_MAX_AGE_SECONDS,
+  };
 }
 
 export function authenticateUser(
   email: string,
-  password: string
+  password: string,
+  registeredCookie?: string
 ): PublicUser | null {
   const normalized = email.trim().toLowerCase();
   if (!normalized || !password) return null;
+
   const store = readAuthStore();
   const user = store.users.find((u) => u.email.toLowerCase() === normalized);
-  if (!user) return null;
-  if (!verifyPassword(password, user.passwordHash)) return null;
-  return toPublicUser(user);
+  if (user) {
+    return verifyPassword(password, user.passwordHash) ? toPublicUser(user) : null;
+  }
+
+  // Fallback for serverless cold starts: check signed registered-users cookie.
+  const seededEmails = new Set(
+    SEEDED_STORED_USERS.map((u) => u.email.toLowerCase())
+  );
+  if (registeredCookie && !seededEmails.has(normalized)) {
+    const parsed = verifyToken<{ users?: unknown[] }>(registeredCookie, "reg1");
+    if (Array.isArray(parsed?.users)) {
+      const candidate = parsed.users.find(
+        (u): u is StoredUser =>
+          isValidPublicUser(u) &&
+          typeof (u as StoredUser).passwordHash === "string" &&
+          (u as StoredUser).email.toLowerCase() === normalized
+      );
+      if (candidate && verifyPassword(password, candidate.passwordHash)) {
+        return toPublicUser(candidate);
+      }
+    }
+  }
+
+  return null;
 }
 
-export function createSession(userId: string): string {
-  const store = readAuthStore();
-  const token = crypto.randomBytes(32).toString("hex");
-  store.sessions[token] = {
-    userId,
-    createdAt: new Date().toISOString(),
-  };
-  writeAuthStore(store);
+export function createSession(userOrId: string | PublicUser): string {
+  const resolvedUser =
+    typeof userOrId === "string" ? findUserById(userOrId) : userOrId;
+
+  const now = Date.now();
+  const token = resolvedUser
+    ? signToken("v2", {
+        iat: now,
+        exp: now + SESSION_MAX_AGE_SECONDS * 1000,
+        user: resolvedUser,
+      })
+    : crypto.randomBytes(32).toString("hex");
+
+  if (resolvedUser) {
+    try {
+      const store = readAuthStore();
+      store.sessions[token] = {
+        userId: resolvedUser.id,
+        createdAt: new Date(now).toISOString(),
+      };
+      writeAuthStore(store);
+    } catch {
+      // Stateless signed token still works across ephemeral serverless functions.
+    }
+  }
   return token;
 }
 
 export function deleteSession(token: string): void {
   if (!token) return;
-  const store = readAuthStore();
-  if (store.sessions[token]) {
-    delete store.sessions[token];
-    writeAuthStore(store);
+  try {
+    const store = readAuthStore();
+    if (store.sessions[token]) {
+      delete store.sessions[token];
+      writeAuthStore(store);
+    }
+  } catch {
+    // Cookie clearance handles stateless termination cleanly.
   }
 }
 
 export function getUserBySessionToken(token: string): PublicUser | null {
   if (!token) return null;
+
+  // 1. Verify HMAC-signed stateless session token (primary for Vercel & local).
+  const payload = verifyToken<{
+    iat?: number;
+    exp?: number;
+    user?: unknown;
+  }>(token, "v2");
+  if (
+    payload &&
+    typeof payload.exp === "number" &&
+    payload.exp > Date.now() &&
+    isValidPublicUser(payload.user)
+  ) {
+    return findUserById(payload.user.id) ?? payload.user;
+  }
+
+  // 2. Legacy /tmp fallback.
   const store = readAuthStore();
   const session = store.sessions[token];
   if (!session) return null;
@@ -371,8 +526,19 @@ export async function getCurrentUser(): Promise<PublicUser | null> {
   return getUserBySessionToken(token);
 }
 
+export function noStoreHeaders(): Record<string, string> {
+  return {
+    "Cache-Control": "private, no-store, no-cache, must-revalidate, max-age=0",
+  };
+}
+
 export function cookieOptionsForRequest(request: Request) {
-  let isHttps = request.headers.get("x-forwarded-proto") === "https";
+  const forwardedProto = request.headers
+    .get("x-forwarded-proto")
+    ?.split(",")[0]
+    ?.trim()
+    .toLowerCase();
+  let isHttps = forwardedProto === "https";
   if (!isHttps) {
     try {
       isHttps = new URL(request.url).protocol === "https:";

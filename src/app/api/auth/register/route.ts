@@ -1,12 +1,19 @@
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { SECTORS } from "@/data";
 import {
+  REGISTERED_USERS_COOKIE,
   SESSION_COOKIE,
+  buildRegisteredUsersCookie,
   cookieOptionsForRequest,
   createSession,
+  noStoreHeaders,
   registerUser,
+  registeredUsersCookieOptions,
 } from "@/lib/auth-store";
 import type { UserRole } from "@/types/citytrace";
+
+export const dynamic = "force-dynamic";
 
 const VALID_ROLES: readonly UserRole[] = ["citizen", "verifier", "official"];
 
@@ -24,7 +31,10 @@ export async function POST(request: Request) {
   try {
     body = (await request.json()) as RegisterBody;
   } catch {
-    return NextResponse.json({ error: "Invalid JSON request body." }, { status: 400 });
+    return NextResponse.json(
+      { error: "Invalid JSON request body." },
+      { status: 400, headers: noStoreHeaders() }
+    );
   }
 
   const name = typeof body.name === "string" ? body.name : "";
@@ -48,12 +58,24 @@ export async function POST(request: Request) {
         error: result.error,
         ...(result.field ? { fields: { [result.field]: result.error } } : {}),
       },
-      { status: result.status }
+      { status: result.status, headers: noStoreHeaders() }
     );
   }
 
-  const token = createSession(result.user.id);
-  const response = NextResponse.json({ user: result.user }, { status: 201 });
+  const cookieStore = await cookies();
+  const existingRegCookie = cookieStore.get(REGISTERED_USERS_COOKIE)?.value;
+  const regToken = buildRegisteredUsersCookie(existingRegCookie, result.storedUser);
+
+  const token = createSession(result.user);
+  const response = NextResponse.json(
+    { user: result.user },
+    { status: 201, headers: noStoreHeaders() }
+  );
   response.cookies.set(SESSION_COOKIE, token, cookieOptionsForRequest(request));
+  response.cookies.set(
+    REGISTERED_USERS_COOKIE,
+    regToken,
+    registeredUsersCookieOptions(request)
+  );
   return response;
 }

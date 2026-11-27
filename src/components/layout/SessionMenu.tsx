@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import {
   ArrowRightLeft,
   Compass,
@@ -38,7 +37,6 @@ export default function SessionMenu({
   user: PublicUser | null;
   demoAccounts?: PublicUser[];
 }) {
-  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [switchingId, setSwitchingId] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -69,7 +67,7 @@ export default function SessionMenu({
       });
       if (response.ok) {
         setOpen(false);
-        router.refresh();
+        window.location.reload();
       }
     } finally {
       setSwitchingId(null);

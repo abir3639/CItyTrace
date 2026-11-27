@@ -10,6 +10,9 @@
  */
 
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 
 const BASE = (process.argv[2] || "http://127.0.0.1:3099").replace(/\/$/, "");
 
@@ -521,7 +524,68 @@ async function main() {
     "Mutated issue record must persist across SSR page render"
   );
 
-  console.log("ALL 18 GOVERNANCE ACCEPTANCE CHECKS PASSED");
+  // 19. Serverless cold-start / isolated-/tmp simulation (Vercel parity check)
+  const authTempFile = path.join(os.tmpdir(), "citytrace-runtime-auth.json");
+  if (fs.existsSync(authTempFile)) {
+    fs.unlinkSync(authTempFile);
+  }
+
+  // Existing demo user session stays authenticated across cold serverless container
+  const coldDemoMe = await citizen.request("/api/auth/me");
+  assert.equal(coldDemoMe.status, 200);
+  assert.equal(
+    coldDemoMe.json.user?.id,
+    "USR-001",
+    "Signed ct_session cookie must survive missing runtime /tmp auth file"
+  );
+
+  // Newly registered user session ALSO stays authenticated after /tmp wiped
+  const coldRegMe = await lightingOfficial.request("/api/auth/me");
+  assert.equal(coldRegMe.status, 200);
+  assert.equal(
+    coldRegMe.json.user?.email,
+    "tariqul.lighting@citytrace.demo",
+    "Registered user signed ct_session cookie must survive serverless cold start"
+  );
+  assert.equal(coldRegMe.json.user?.departmentId, "DEPT-LIGHTING");
+
+  // Logout clears cookie, and newly registered user can log back in via signed ct_reg cookie
+  const logoutRes = await lightingOfficial.request("/api/auth/logout", {
+    method: "POST",
+  });
+  assert.equal(logoutRes.status, 200);
+  if (fs.existsSync(authTempFile)) {
+    fs.unlinkSync(authTempFile);
+  }
+  const afterLogoutMe = await lightingOfficial.request("/api/auth/me");
+  assert.equal(
+    afterLogoutMe.json.user,
+    null,
+    "User must be null after logout clears ct_session"
+  );
+
+  const reloginRes = await lightingOfficial.request("/api/auth/login", {
+    method: "POST",
+    body: JSON.stringify({
+      email: "tariqul.lighting@citytrace.demo",
+      password: "citytrace123",
+    }),
+  });
+  assert.equal(
+    reloginRes.status,
+    200,
+    `Newly registered user must be able to re-login after cold start: ${reloginRes.text}`
+  );
+  assert.equal(reloginRes.json.user.email, "tariqul.lighting@citytrace.demo");
+
+  // Tampered session token must be rejected cleanly
+  const tamperedClient = new AgentClient("tampered");
+  tamperedClient.cookies.set("ct_session", "v2.eyJ1c2VyIjp7ImlkIjoiVVNSLTAwMyJ9fQ.invalidsig");
+  const tamperedMe = await tamperedClient.request("/api/auth/me");
+  assert.equal(tamperedMe.status, 200);
+  assert.equal(tamperedMe.json.user, null, "Tampered ct_session cookie must return null");
+
+  console.log("ALL 19 GOVERNANCE & VERCEL-SERVERLESS AUTH CHECKS PASSED");
 }
 
 main().catch((err) => {
