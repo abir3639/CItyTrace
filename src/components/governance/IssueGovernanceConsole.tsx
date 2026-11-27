@@ -116,7 +116,16 @@ export default function IssueGovernanceConsole({
   };
 
   const onPickPhoto = (file: File | null) => {
-    if (!file || !file.type.startsWith("image/") || file.size > 1_500_000) return;
+    if (!file) return;
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      setError("Choose a JPG, PNG or WebP photo.");
+      return;
+    }
+    if (file.size > 1_500_000) {
+      setError("That photo is larger than 1.5 MB. Choose a smaller file.");
+      return;
+    }
+    setError(null);
     const reader = new FileReader();
     reader.onload = () => {
       if (typeof reader.result === "string") setPhotoDataUrl(reader.result);
@@ -504,7 +513,7 @@ export default function IssueGovernanceConsole({
                 <input
                   ref={fileRef}
                   type="file"
-                  accept="image/*"
+                  accept="image/jpeg,image/png,image/webp"
                   className="sr-only"
                   onChange={(e) => onPickPhoto(e.target.files?.[0] ?? null)}
                 />

@@ -27,6 +27,7 @@ import {
 } from "@/types/citytrace";
 
 const MAX_FILE_BYTES = 1_500_000;
+const PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
 const CORRIDOR_PRESETS: {
   label: string;
@@ -104,8 +105,8 @@ export default function ReportIssueForm({
       setPhoto(null);
       return;
     }
-    if (!file.type.startsWith("image/")) {
-      setErrors((previous) => ({ ...previous, photo: "Choose an image file." }));
+    if (!PHOTO_TYPES.includes(file.type)) {
+      setErrors((previous) => ({ ...previous, photo: "Choose a JPG, PNG or WebP photo." }));
       return;
     }
     if (file.size > MAX_FILE_BYTES) {
@@ -423,11 +424,11 @@ export default function ReportIssueForm({
         ) : (
           <label className="flex cursor-pointer items-center justify-center gap-2 rounded-[14px] border border-dashed border-black/[0.14] bg-[#F5F5F7]/70 px-4 py-5 text-[13px] font-medium text-[#6E6E73] transition-colors hover:border-[#007AFF]/50 hover:text-[#007AFF]">
             <Camera className="h-4 w-4" />
-            Attach a photograph (JPG or PNG, max 1.5 MB)
+            Attach a photograph (JPG, PNG or WebP, max 1.5 MB)
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/*"
+              accept="image/jpeg,image/png,image/webp"
               className="sr-only"
               onChange={(event) => onPickFile(event.target.files?.[0] ?? null)}
             />

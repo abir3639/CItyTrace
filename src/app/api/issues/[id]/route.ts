@@ -12,14 +12,7 @@ import {
   submitRepairCompletion,
   unconfirmIssue,
 } from "@/lib/issue-store";
-
-const MAX_PHOTO_CHARS = 2_500_000;
-
-function validPhoto(raw: unknown): string | undefined {
-  if (typeof raw !== "string" || raw.length === 0) return undefined;
-  if (!raw.startsWith("data:image/") || raw.length > MAX_PHOTO_CHARS) return undefined;
-  return raw;
-}
+import { photoFromBody } from "@/lib/photos";
 
 export async function PATCH(
   request: Request,
@@ -114,6 +107,10 @@ export async function PATCH(
   }
 
   if (action === "submit_repair") {
+    const photo = await photoFromBody(body.photoDataUrl);
+    if ("error" in photo) {
+      return NextResponse.json({ error: photo.error }, { status: photo.status });
+    }
     const result = await submitRepairCompletion(id, user, {
       resolutionNotes:
         typeof body.resolutionNotes === "string" ? body.resolutionNotes : "",
@@ -122,7 +119,7 @@ export async function PATCH(
       evidenceTitle: typeof body.evidenceTitle === "string" ? body.evidenceTitle : "",
       evidenceDescription:
         typeof body.evidenceDescription === "string" ? body.evidenceDescription : undefined,
-      photoDataUrl: validPhoto(body.photoDataUrl),
+      photoDataUrl: photo.value,
       expectedVersion,
     });
     if (!result.ok) {
@@ -142,11 +139,15 @@ export async function PATCH(
         { status: 422 }
       );
     }
+    const photo = await photoFromBody(body.photoDataUrl);
+    if ("error" in photo) {
+      return NextResponse.json({ error: photo.error }, { status: photo.status });
+    }
     const result = await inspectRepairSubmission(id, user, {
       decision,
       notes: typeof body.notes === "string" ? body.notes : "",
       evidenceTitle: typeof body.evidenceTitle === "string" ? body.evidenceTitle : undefined,
-      photoDataUrl: validPhoto(body.photoDataUrl),
+      photoDataUrl: photo.value,
       expectedVersion,
     });
     if (!result.ok) {
@@ -156,9 +157,13 @@ export async function PATCH(
   }
 
   if (action === "submit_recurrence") {
+    const photo = await photoFromBody(body.photoDataUrl);
+    if ("error" in photo) {
+      return NextResponse.json({ error: photo.error }, { status: photo.status });
+    }
     const result = await submitRecurrenceRequest(id, user, {
       reason: typeof body.reason === "string" ? body.reason : "",
-      photoDataUrl: validPhoto(body.photoDataUrl),
+      photoDataUrl: photo.value,
       expectedVersion,
     });
     if (!result.ok) {

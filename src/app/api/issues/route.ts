@@ -3,9 +3,8 @@ import { SECTORS } from "@/data";
 import { getCurrentUser } from "@/lib/auth-store";
 import { createIssue } from "@/lib/issue-store";
 import { canUserPerform } from "@/lib/permissions";
+import { PhotoError, parsePhoto, storePhoto } from "@/lib/photos";
 import { ISSUE_CATEGORIES, type IssueCategory, type MapPosition } from "@/types/citytrace";
-
-const MAX_PHOTO_CHARS = 2_500_000; // ~1.8 MB of image data as base64
 
 interface Body {
   title?: unknown;
@@ -62,14 +61,17 @@ export async function POST(request: Request) {
   if (!ISSUE_CATEGORIES.includes(category))
     errors.category = "Choose a valid category.";
 
-  let photoDataUrl: string | undefined;
-  if (typeof body.photoDataUrl === "string" && body.photoDataUrl.length > 0) {
-    if (!body.photoDataUrl.startsWith("data:image/")) {
-      errors.photo = "The attachment must be an image file.";
-    } else if (body.photoDataUrl.length > MAX_PHOTO_CHARS) {
-      errors.photo = "That image is too large — please use a file under 1.5 MB.";
-    } else {
-      photoDataUrl = body.photoDataUrl;
+  // Validate the photo with the other fields; it is uploaded only once everything passes.
+  const rawPhoto =
+    typeof body.photoDataUrl === "string" && body.photoDataUrl.length > 0
+      ? body.photoDataUrl
+      : undefined;
+  if (rawPhoto) {
+    try {
+      parsePhoto(rawPhoto);
+    } catch (error) {
+      errors.photo =
+        error instanceof PhotoError ? error.message : "The attachment could not be read.";
     }
   }
 
@@ -90,6 +92,19 @@ export async function POST(request: Request) {
 
   if (Object.keys(errors).length > 0) {
     return NextResponse.json({ error: "Validation failed.", fields: errors }, { status: 422 });
+  }
+
+  let photoDataUrl: string | undefined;
+  if (rawPhoto) {
+    try {
+      photoDataUrl = await storePhoto(rawPhoto);
+    } catch (error) {
+      console.error(error);
+      return NextResponse.json(
+        { error: "Your photo could not be saved. Please try again.", fields: { photo: "Upload failed — try again." } },
+        { status: 502 }
+      );
+    }
   }
 
   const issue = await createIssue(
