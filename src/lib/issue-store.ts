@@ -20,7 +20,10 @@ import type {
 import { ISSUE_STATUS_LABELS } from "@/types/citytrace";
 import { SEEDED_PUBLIC_USERS, toUserRef } from "./auth-store";
 import { getDepartment, getDepartmentForIssue } from "./departments";
-import { dispatchAccountabilityNotifications } from "./governance-store";
+import {
+  dispatchAccountabilityNotifications,
+  type DispatchNotificationInput,
+} from "./governance-store";
 import { canUserPerform, isValidTransition, normalizeIssueStatus } from "./permissions";
 import { DEMO_NOW } from "./stats";
 
@@ -29,7 +32,7 @@ import { DEMO_NOW } from "./stats";
  * async but this store's functions are not yet, so notifications are sent
  * without waiting. Errors are logged instead of crashing the server.
  */
-function notifyInBackground(input: Parameters<typeof dispatchAccountabilityNotifications>[0]): void {
+function notifyInBackground(input: DispatchNotificationInput): void {
   dispatchAccountabilityNotifications(input).catch((error) => {
     console.error("Notification dispatch failed:", error);
   });
@@ -593,27 +596,52 @@ function enrichIssueV2(rawIssue: Issue): Issue {
 /* Public Reads                                                        */
 /* ------------------------------------------------------------------ */
 
-export function listIssues(): Issue[] {
-  const store = readStore();
+// Pure readers: compute from a store value already in hand. Save functions use
+// these inside withIssueStore() so every lookup sees the same copy they change.
+
+function issuesFrom(store: StoreShape): Issue[] {
   const merged = ISSUES.map((issue) => store.overrides[issue.id] ?? issue);
   return [...merged, ...store.created].map(enrichIssueV2);
 }
 
-export function findIssue(id: string): Issue | undefined {
-  return listIssues().find((issue) => issue.id === id);
+function findIssueIn(store: StoreShape, id: string): Issue | undefined {
+  return issuesFrom(store).find((issue) => issue.id === id);
 }
 
-export function listAllEvidence(): Evidence[] {
-  const store = readStore();
-  const issues = listIssues();
+function evidenceFrom(store: StoreShape): Evidence[] {
+  const issues = issuesFrom(store);
   const combined = [...EVIDENCE, ...SYNTHETIC_REPAIR_EVIDENCE, ...store.evidence];
   return combined.map((item) =>
     enrichEvidenceV2(store.evidenceOverrides[item.id] ?? item, issues)
   );
 }
 
+function findEvidenceIn(store: StoreShape, id: string): Evidence | undefined {
+  return evidenceFrom(store).find((item) => item.id === id);
+}
+
+function nextIssueIdFrom(store: StoreShape): string {
+  const all = issuesFrom(store);
+  const used = new Set(all.map((issue) => issue.id));
+  let index = all.length + 1;
+  while (used.has(`ISS-${String(index).padStart(3, "0")}`)) index += 1;
+  return `ISS-${String(index).padStart(3, "0")}`;
+}
+
+export function listIssues(): Issue[] {
+  return issuesFrom(readStore());
+}
+
+export function findIssue(id: string): Issue | undefined {
+  return findIssueIn(readStore(), id);
+}
+
+export function listAllEvidence(): Evidence[] {
+  return evidenceFrom(readStore());
+}
+
 export function findRuntimeEvidence(id: string): Evidence | undefined {
-  return listAllEvidence().find((item) => item.id === id);
+  return findEvidenceIn(readStore(), id);
 }
 
 export function listRuntimeEvidence(): Evidence[] {
@@ -627,26 +655,41 @@ export function issuesAtLocation(locationKey: string): Issue[] {
 }
 
 export function nextIssueId(): string {
-  const all = listIssues();
-  const used = new Set(all.map((issue) => issue.id));
-  let index = all.length + 1;
-  while (used.has(`ISS-${String(index).padStart(3, "0")}`)) index += 1;
-  return `ISS-${String(index).padStart(3, "0")}`;
+  return nextIssueIdFrom(readStore());
 }
 
 /* ------------------------------------------------------------------ */
 /* Persistence helpers                                                 */
 /* ------------------------------------------------------------------ */
 
-function saveUpdatedIssue(updated: Issue): void {
+/**
+ * Runs one save: reads the store once, lets `mutate` change it and queue
+ * notifications, saves (only if something changed), then sends the queued
+ * notifications. Every save function goes through here.
+ */
+function withIssueStore<R>(
+  mutate: (store: StoreShape, notices: DispatchNotificationInput[]) => R
+): R {
   const store = readStore();
+  const before = JSON.stringify(store);
+  const notices: DispatchNotificationInput[] = [];
+  const result = mutate(store, notices);
+  if (JSON.stringify(store) !== before) {
+    writeStore(store);
+  }
+  for (const notice of notices) {
+    notifyInBackground(notice);
+  }
+  return result;
+}
+
+function saveUpdatedIssueIn(store: StoreShape, updated: Issue): void {
   const createdIndex = store.created.findIndex((item) => item.id === updated.id);
   if (createdIndex >= 0) {
     store.created[createdIndex] = updated;
   } else {
     store.overrides[updated.id] = updated;
   }
-  writeStore(store);
 }
 
 function makeAccountabilityEvent(
@@ -757,6 +800,7 @@ const CORRIDOR_PATTERNS: { locationKey: string; terms: string[] }[] = [
 ];
 
 function resolveLocationMatch(
+  store: StoreShape,
   location: string,
   sectorId: string,
   explicitKey?: string
@@ -766,7 +810,7 @@ function resolveLocationMatch(
   reopensIssueId?: string;
   baseCoordinates?: MapPosition;
 } | null {
-  const all = listIssues();
+  const all = issuesFrom(store);
   const knownKeys = new Set<string>([
     ...PROJECTS.map((project) => project.locationKey),
     ...all.map((issue) => issue.locationKey),
@@ -843,144 +887,144 @@ export interface CreateIssueInput {
 }
 
 export function createIssue(input: CreateIssueInput, author: PublicUser): Issue {
-  const store = readStore();
-  const id = nextIssueId();
-  const code = `CT-ISS-${id.split("-")[1]}`;
-  const today = DEMO_NOW;
-  const match = resolveLocationMatch(input.location, input.sectorId, input.locationKey);
-  const dept = getDepartmentForIssue({ category: input.category });
+  return withIssueStore<Issue>((store, notices) => {
+    const id = nextIssueIdFrom(store);
+    const code = `CT-ISS-${id.split("-")[1]}`;
+    const today = DEMO_NOW;
+    const match = resolveLocationMatch(store, input.location, input.sectorId, input.locationKey);
+    const dept = getDepartmentForIssue({ category: input.category });
 
-  const evidence: Evidence[] = [];
-  if (input.photoDataUrl) {
-    evidence.push({
-      id: `EV-${id}-1`,
-      kind: "photo",
-      title: "Citizen photograph",
-      capturedAt: today,
-      uploadedAt: today,
-      uploadedBy: toUserRef(author),
-      category: "citizen_report",
-      status: "unverified",
-      issueId: id,
-      ...(match?.projectId ? { projectId: match.projectId } : {}),
-      source: `${author.name} (${author.role})`,
-      verified: false,
-      description: `Photograph attached to the report by ${author.name}. Not yet reviewed by a Civic Verifier.`,
-      dataUrl: input.photoDataUrl,
-      verificationHistory: [],
-    });
-  }
+    const evidence: Evidence[] = [];
+    if (input.photoDataUrl) {
+      evidence.push({
+        id: `EV-${id}-1`,
+        kind: "photo",
+        title: "Citizen photograph",
+        capturedAt: today,
+        uploadedAt: today,
+        uploadedBy: toUserRef(author),
+        category: "citizen_report",
+        status: "unverified",
+        issueId: id,
+        ...(match?.projectId ? { projectId: match.projectId } : {}),
+        source: `${author.name} (${author.role})`,
+        verified: false,
+        description: `Photograph attached to the report by ${author.name}. Not yet reviewed by a Civic Verifier.`,
+        dataUrl: input.photoDataUrl,
+        verificationHistory: [],
+      });
+    }
 
-  const resolvedCoordinates: MapPosition = input.coordinates
-    ? [
-        Number(input.coordinates[0].toFixed(2)),
-        Number(input.coordinates[1].toFixed(2)),
-      ]
-    : positionFor(input.sectorId, id, match?.baseCoordinates);
+    const resolvedCoordinates: MapPosition = input.coordinates
+      ? [
+          Number(input.coordinates[0].toFixed(2)),
+          Number(input.coordinates[1].toFixed(2)),
+        ]
+      : positionFor(input.sectorId, id, match?.baseCoordinates);
 
-  const actorKind: IssueActor =
-    author.role === "verifier" ? "municipal-desk" : "citizen";
+    const actorKind: IssueActor =
+      author.role === "verifier" ? "municipal-desk" : "citizen";
 
-  const baseEvent: IssueEvent = {
-    id: `${id}-H1`,
-    at: today,
-    status: "reported",
-    note: `Filed by ${author.name} through the CityTrace civic register.`,
-    actor: actorKind,
-    actorName: author.name,
-    actorUserId: author.id,
-    actorRole: author.role,
-    actorInitials: author.initials,
-    actorAvatarColor: author.avatarColor,
-  };
-
-  const timeline: AccountabilityEvent[] = [
-    {
-      id: `AE-${id}-1`,
-      type: "issue_created",
-      actorId: author.id,
+    const baseEvent: IssueEvent = {
+      id: `${id}-H1`,
+      at: today,
+      status: "reported",
+      note: `Filed by ${author.name} through the CityTrace civic register.`,
+      actor: actorKind,
       actorName: author.name,
+      actorUserId: author.id,
       actorRole: author.role,
       actorInitials: author.initials,
       actorAvatarColor: author.avatarColor,
-      timestamp: today,
-      description: `Reported "${input.title}" at ${input.location}. Assigned to ${dept.shortName} intake queue.`,
-      newValue: "Reported",
-      ...(match?.projectId ? { projectId: match.projectId } : {}),
-    },
-  ];
+    };
 
-  if (evidence.length > 0) {
-    timeline.push({
-      id: `AE-${id}-2`,
-      type: "evidence_submitted",
-      actorId: author.id,
-      actorName: author.name,
-      actorRole: author.role,
-      actorInitials: author.initials,
-      actorAvatarColor: author.avatarColor,
-      timestamp: today,
-      description: `Attached photographic evidence (${evidence[0].id}) awaiting verification.`,
-      evidenceIds: [evidence[0].id],
-    });
-  }
-
-  const issue: Issue = {
-    id,
-    code,
-    version: 1,
-    title: input.title,
-    category: input.category,
-    description: input.description,
-    sectorId: input.sectorId,
-    departmentId: dept.id,
-    location: input.location,
-    locationKey: match?.locationKey ?? (slugifyLocation(input.location) || slugifyLocation(id)),
-    coordinates: resolvedCoordinates,
-    status: "reported",
-    severity: "moderate",
-    reportedAt: today,
-    updatedAt: today,
-    reportCount: 1,
-    ...(match?.reopensIssueId ? { reopensIssueId: match.reopensIssueId } : {}),
-    ...(match?.projectId ? { projectId: match.projectId } : {}),
-    evidenceIds: evidence.map((item) => item.id),
-    reportedBy: toUserRef(author),
-    votes: [
+    const timeline: AccountabilityEvent[] = [
       {
-        userId: author.id,
-        userName: author.name,
-        userRole: author.role,
-        userInitials: author.initials,
-        avatarColor: author.avatarColor,
-        votedAt: today,
-        note: "Filed the initial civic complaint.",
+        id: `AE-${id}-1`,
+        type: "issue_created",
+        actorId: author.id,
+        actorName: author.name,
+        actorRole: author.role,
+        actorInitials: author.initials,
+        actorAvatarColor: author.avatarColor,
+        timestamp: today,
+        description: `Reported "${input.title}" at ${input.location}. Assigned to ${dept.shortName} intake queue.`,
+        newValue: "Reported",
+        ...(match?.projectId ? { projectId: match.projectId } : {}),
       },
-    ],
-    history: [baseEvent],
-    accountabilityTimeline: timeline,
-  };
+    ];
 
-  store.created.push(issue);
-  store.evidence.push(...evidence);
-  writeStore(store);
+    if (evidence.length > 0) {
+      timeline.push({
+        id: `AE-${id}-2`,
+        type: "evidence_submitted",
+        actorId: author.id,
+        actorName: author.name,
+        actorRole: author.role,
+        actorInitials: author.initials,
+        actorAvatarColor: author.avatarColor,
+        timestamp: today,
+        description: `Attached photographic evidence (${evidence[0].id}) awaiting verification.`,
+        evidenceIds: [evidence[0].id],
+      });
+    }
+
+    const issue: Issue = {
+      id,
+      code,
+      version: 1,
+      title: input.title,
+      category: input.category,
+      description: input.description,
+      sectorId: input.sectorId,
+      departmentId: dept.id,
+      location: input.location,
+      locationKey: match?.locationKey ?? (slugifyLocation(input.location) || slugifyLocation(id)),
+      coordinates: resolvedCoordinates,
+      status: "reported",
+      severity: "moderate",
+      reportedAt: today,
+      updatedAt: today,
+      reportCount: 1,
+      ...(match?.reopensIssueId ? { reopensIssueId: match.reopensIssueId } : {}),
+      ...(match?.projectId ? { projectId: match.projectId } : {}),
+      evidenceIds: evidence.map((item) => item.id),
+      reportedBy: toUserRef(author),
+      votes: [
+        {
+          userId: author.id,
+          userName: author.name,
+          userRole: author.role,
+          userInitials: author.initials,
+          avatarColor: author.avatarColor,
+          votedAt: today,
+          note: "Filed the initial civic complaint.",
+        },
+      ],
+      history: [baseEvent],
+      accountabilityTimeline: timeline,
+    };
+
+    store.created.push(issue);
+    store.evidence.push(...evidence);
 
   
-  notifyInBackground({
-    dedupeKey: `issue_created:${issue.id}`,
-    category: "new_issue",
-    title: `New report ${issue.code} in ${issue.sectorId}`,
-    message: `${author.name} reported "${issue.title}" (${dept.shortName}).`,
-    href: `/civic-issues/${issue.id}`,
-    issueId: issue.id,
-    sectorId: issue.sectorId,
-    projectId: issue.projectId,
-    departmentId: dept.id,
-    targetRoles: ["verifier"],
-    excludeUserId: author.id,
-  });
+    notices.push({
+      dedupeKey: `issue_created:${issue.id}`,
+      category: "new_issue",
+      title: `New report ${issue.code} in ${issue.sectorId}`,
+      message: `${author.name} reported "${issue.title}" (${dept.shortName}).`,
+      href: `/civic-issues/${issue.id}`,
+      issueId: issue.id,
+      sectorId: issue.sectorId,
+      projectId: issue.projectId,
+      departmentId: dept.id,
+      targetRoles: ["verifier"],
+      excludeUserId: author.id,
+    });
 
-  return issue;
+    return issue;
+  });
 }
 
 export function confirmIssue(
@@ -988,71 +1032,75 @@ export function confirmIssue(
   user: PublicUser,
   note?: string
 ): { issue: Issue; alreadyVoted: boolean; forbidden?: string } | null {
-  const base = findIssue(id);
-  if (!base) return null;
+  return withIssueStore<{ issue: Issue; alreadyVoted: boolean; forbidden?: string } | null>((store, notices) => {
+    const base = findIssueIn(store, id);
+    if (!base) return null;
 
-  const perm = canUserPerform(user, "vote_issue", { issue: base });
-  if (!perm.allowed) {
-    return { issue: base, alreadyVoted: false, forbidden: perm.reason };
-  }
+    const perm = canUserPerform(user, "vote_issue", { issue: base });
+    if (!perm.allowed) {
+      return { issue: base, alreadyVoted: false, forbidden: perm.reason };
+    }
 
-  const existingVotes = base.votes ?? [];
-  if (existingVotes.some((vote) => vote.userId === user.id)) {
-    return { issue: base, alreadyVoted: true };
-  }
+    const existingVotes = base.votes ?? [];
+    if (existingVotes.some((vote) => vote.userId === user.id)) {
+      return { issue: base, alreadyVoted: true };
+    }
 
-  const today = DEMO_NOW;
-  const trimmedNote = note?.trim();
-  const vote: IssueVote = {
-    userId: user.id,
-    userName: user.name,
-    userRole: user.role,
-    userInitials: user.initials,
-    avatarColor: user.avatarColor,
-    votedAt: today,
-    ...(trimmedNote ? { note: trimmedNote } : {}),
-  };
+    const today = DEMO_NOW;
+    const trimmedNote = note?.trim();
+    const vote: IssueVote = {
+      userId: user.id,
+      userName: user.name,
+      userRole: user.role,
+      userInitials: user.initials,
+      avatarColor: user.avatarColor,
+      votedAt: today,
+      ...(trimmedNote ? { note: trimmedNote } : {}),
+    };
 
-  const event = makeHistoryEvent(
-    base,
-    user,
-    base.status,
-    trimmedNote || `${user.name} confirmed this issue is still present on site.`
-  );
+    const event = makeHistoryEvent(
+      base,
+      user,
+      base.status,
+      trimmedNote || `${user.name} confirmed this issue is still present on site.`
+    );
 
-  const updated: Issue = {
-    ...base,
-    version: (base.version ?? 1) + 1,
-    reportCount: base.reportCount + 1,
-    updatedAt: today,
-    votes: [...existingVotes, vote],
-    history: [...base.history, event],
-  };
+    const updated: Issue = {
+      ...base,
+      version: (base.version ?? 1) + 1,
+      reportCount: base.reportCount + 1,
+      updatedAt: today,
+      votes: [...existingVotes, vote],
+      history: [...base.history, event],
+    };
 
-  saveUpdatedIssue(updated);
-  return { issue: updated, alreadyVoted: false };
+    saveUpdatedIssueIn(store, updated);
+    return { issue: updated, alreadyVoted: false };
+  });
 }
 
 export function unconfirmIssue(id: string, user: PublicUser): Issue | null {
-  const base = findIssue(id);
-  if (!base) return null;
+  return withIssueStore<Issue | null>((store, notices) => {
+    const base = findIssueIn(store, id);
+    if (!base) return null;
 
-  const existingVotes = base.votes ?? [];
-  if (!existingVotes.some((vote) => vote.userId === user.id)) {
-    return base;
-  }
+    const existingVotes = base.votes ?? [];
+    if (!existingVotes.some((vote) => vote.userId === user.id)) {
+      return base;
+    }
 
-  const nextVotes = existingVotes.filter((vote) => vote.userId !== user.id);
-  const updated: Issue = {
-    ...base,
-    version: (base.version ?? 1) + 1,
-    reportCount: Math.max(1, base.reportCount - 1),
-    updatedAt: DEMO_NOW,
-    votes: nextVotes,
-  };
+    const nextVotes = existingVotes.filter((vote) => vote.userId !== user.id);
+    const updated: Issue = {
+      ...base,
+      version: (base.version ?? 1) + 1,
+      reportCount: Math.max(1, base.reportCount - 1),
+      updatedAt: DEMO_NOW,
+      votes: nextVotes,
+    };
 
-  saveUpdatedIssue(updated);
-  return updated;
+    saveUpdatedIssueIn(store, updated);
+    return updated;
+  });
 }
 
 /** Reported -> Under Review (Verifier only). */
@@ -1062,63 +1110,65 @@ export function reviewIssue(
   note?: string,
   expectedVersion?: number
 ): IssueMutationSuccess | MutationError {
-  const base = findIssue(id);
-  if (!base) return { ok: false, status: 404, error: `Unknown issue "${id}".` };
+  return withIssueStore<IssueMutationSuccess | MutationError>((store, notices) => {
+    const base = findIssueIn(store, id);
+    if (!base) return { ok: false, status: 404, error: `Unknown issue "${id}".` };
 
-  const stale = checkVersion(base, expectedVersion);
-  if (stale) return stale;
+    const stale = checkVersion(base, expectedVersion);
+    if (stale) return stale;
 
-  const perm = canUserPerform(user, "review_issue", { issue: base });
-  if (!perm.allowed) return { ok: false, status: 403, error: perm.reason ?? "Forbidden." };
+    const perm = canUserPerform(user, "review_issue", { issue: base });
+    if (!perm.allowed) return { ok: false, status: 403, error: perm.reason ?? "Forbidden." };
 
-  if (!isValidTransition(base.status, "under_review")) {
-    return {
-      ok: false,
-      status: 422,
-      error: `Cannot transition from ${base.status} to under_review.`,
-    };
-  }
-
-  const trimmedNote =
-    note?.trim() || "Civic Verifier reviewed initial report and forwarded to responsible department.";
-  const timelineEvent = makeAccountabilityEvent(
-    base,
-    user,
-    "status_changed",
-    trimmedNote,
-    {
-      previousValue: ISSUE_STATUS_LABELS[base.status],
-      newValue: ISSUE_STATUS_LABELS.under_review,
+    if (!isValidTransition(base.status, "under_review")) {
+      return {
+        ok: false,
+        status: 422,
+        error: `Cannot transition from ${base.status} to under_review.`,
+      };
     }
-  );
 
-  const dept = getDepartmentForIssue(base);
-  const updated: Issue = {
-    ...base,
-    version: (base.version ?? 1) + 1,
-    status: "under_review",
-    departmentId: base.departmentId ?? dept.id,
-    updatedAt: DEMO_NOW,
-    history: [...base.history, makeHistoryEvent(base, user, "under_review", trimmedNote)],
-    accountabilityTimeline: [...(base.accountabilityTimeline ?? []), timelineEvent],
-  };
+    const trimmedNote =
+      note?.trim() || "Civic Verifier reviewed initial report and forwarded to responsible department.";
+    const timelineEvent = makeAccountabilityEvent(
+      base,
+      user,
+      "status_changed",
+      trimmedNote,
+      {
+        previousValue: ISSUE_STATUS_LABELS[base.status],
+        newValue: ISSUE_STATUS_LABELS.under_review,
+      }
+    );
 
-  saveUpdatedIssue(updated);
-    notifyInBackground({
-    dedupeKey: `review:${updated.id}:${updated.version}`,
-    category: "status_update",
-    title: `${updated.code} moved to Under Review`,
-    message: `${user.name} verified intake for "${updated.title}". Assigned to ${dept.shortName}.`,
-    href: `/civic-issues/${updated.id}`,
-    issueId: updated.id,
-    sectorId: updated.sectorId,
-    projectId: updated.projectId,
-    departmentId: updated.departmentId,
-    targetRoles: ["official"],
-    excludeUserId: user.id,
+    const dept = getDepartmentForIssue(base);
+    const updated: Issue = {
+      ...base,
+      version: (base.version ?? 1) + 1,
+      status: "under_review",
+      departmentId: base.departmentId ?? dept.id,
+      updatedAt: DEMO_NOW,
+      history: [...base.history, makeHistoryEvent(base, user, "under_review", trimmedNote)],
+      accountabilityTimeline: [...(base.accountabilityTimeline ?? []), timelineEvent],
+    };
+
+    saveUpdatedIssueIn(store, updated);
+      notices.push({
+      dedupeKey: `review:${updated.id}:${updated.version}`,
+      category: "status_update",
+      title: `${updated.code} moved to Under Review`,
+      message: `${user.name} verified intake for "${updated.title}". Assigned to ${dept.shortName}.`,
+      href: `/civic-issues/${updated.id}`,
+      issueId: updated.id,
+      sectorId: updated.sectorId,
+      projectId: updated.projectId,
+      departmentId: updated.departmentId,
+      targetRoles: ["official"],
+      excludeUserId: user.id,
+    });
+
+    return { ok: true, issue: updated };
   });
-
-  return { ok: true, issue: updated };
 }
 
 /** Under Review | Reopened -> In Progress (Authorized Department Official). */
@@ -1135,140 +1185,142 @@ export function startOfficialRepair(
     expectedVersion?: number;
   }
 ): IssueMutationSuccess | MutationError {
-  const base = findIssue(id);
-  if (!base) return { ok: false, status: 404, error: `Unknown issue "${id}".` };
+  return withIssueStore<IssueMutationSuccess | MutationError>((store, notices) => {
+    const base = findIssueIn(store, id);
+    if (!base) return { ok: false, status: 404, error: `Unknown issue "${id}".` };
 
-  const stale = checkVersion(base, payload.expectedVersion);
-  if (stale) return stale;
+    const stale = checkVersion(base, payload.expectedVersion);
+    if (stale) return stale;
 
-  const dept = getDepartment(payload.departmentId) ?? getDepartmentForIssue(base);
-  const perm = canUserPerform(user, "start_repair", {
-    issue: base,
-    targetDepartmentId: dept.id,
-  });
-  if (!perm.allowed) return { ok: false, status: 403, error: perm.reason ?? "Forbidden." };
+    const dept = getDepartment(payload.departmentId) ?? getDepartmentForIssue(base);
+    const perm = canUserPerform(user, "start_repair", {
+      issue: base,
+      targetDepartmentId: dept.id,
+    });
+    if (!perm.allowed) return { ok: false, status: 403, error: perm.reason ?? "Forbidden." };
 
-  if (!isValidTransition(base.status, "in_progress")) {
-    return {
-      ok: false,
-      status: 422,
-      error: `Cannot transition from ${base.status} to in_progress.`,
+    if (!isValidTransition(base.status, "in_progress")) {
+      return {
+        ok: false,
+        status: 422,
+        error: `Cannot transition from ${base.status} to in_progress.`,
+      };
+    }
+
+    const responseText = payload.officialResponse.trim();
+    if (responseText.length < 10) {
+      return {
+        ok: false,
+        status: 422,
+        error: "Official response must explain the planned action (at least 10 characters).",
+      };
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(payload.estimatedRepairDate)) {
+      return { ok: false, status: 422, error: "Provide a valid estimated repair date." };
+    }
+    if (
+      payload.projectId &&
+      !PROJECTS.some((project) => project.id === payload.projectId)
+    ) {
+      return { ok: false, status: 422, error: "Selected project reference does not exist." };
+    }
+
+    const workOrderRef = payload.workOrderRef?.trim() || undefined;
+    const assignedTeam = payload.assignedTeam?.trim() || undefined;
+    const projectId = payload.projectId?.trim() || base.projectId;
+    const userRef = toUserRef(user);
+    const priorDate = base.estimatedRepairDate;
+    const wasBreached = Boolean(base.slaBreachedAt);
+
+    const deadlineEntry = {
+      id: `DL-${base.id}-${(base.deadlineHistory?.length ?? 0) + 1}`,
+      ...(priorDate ? { previousDate: priorDate } : {}),
+      newDate: payload.estimatedRepairDate,
+      reason: priorDate
+        ? `Updated SLA target upon repair mobilization: ${responseText.slice(0, 80)}`
+        : "Initial official repair SLA deadline established.",
+      changedBy: userRef,
+      changedAt: DEMO_NOW,
+      breachedPriorDeadline: wasBreached,
     };
-  }
 
-  const responseText = payload.officialResponse.trim();
-  if (responseText.length < 10) {
-    return {
-      ok: false,
-      status: 422,
-      error: "Official response must explain the planned action (at least 10 characters).",
-    };
-  }
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(payload.estimatedRepairDate)) {
-    return { ok: false, status: 422, error: "Provide a valid estimated repair date." };
-  }
-  if (
-    payload.projectId &&
-    !PROJECTS.some((project) => project.id === payload.projectId)
-  ) {
-    return { ok: false, status: 422, error: "Selected project reference does not exist." };
-  }
-
-  const workOrderRef = payload.workOrderRef?.trim() || undefined;
-  const assignedTeam = payload.assignedTeam?.trim() || undefined;
-  const projectId = payload.projectId?.trim() || base.projectId;
-  const userRef = toUserRef(user);
-  const priorDate = base.estimatedRepairDate;
-  const wasBreached = Boolean(base.slaBreachedAt);
-
-  const deadlineEntry = {
-    id: `DL-${base.id}-${(base.deadlineHistory?.length ?? 0) + 1}`,
-    ...(priorDate ? { previousDate: priorDate } : {}),
-    newDate: payload.estimatedRepairDate,
-    reason: priorDate
-      ? `Updated SLA target upon repair mobilization: ${responseText.slice(0, 80)}`
-      : "Initial official repair SLA deadline established.",
-    changedBy: userRef,
-    changedAt: DEMO_NOW,
-    breachedPriorDeadline: wasBreached,
-  };
-
-  const newEvents: AccountabilityEvent[] = [
-    makeAccountabilityEvent(
-      base,
-      user,
-      "official_response",
-      responseText,
-      {
-        previousValue: ISSUE_STATUS_LABELS[base.status],
-        newValue: ISSUE_STATUS_LABELS.in_progress,
-        ...(projectId ? { projectId } : {}),
-        ...(workOrderRef ? { workOrderRef } : {}),
-      }
-    ),
-    makeAccountabilityEvent(
-      base,
-      user,
-      priorDate ? "deadline_changed" : "deadline_set",
-      `Estimated repair completion set to ${payload.estimatedRepairDate}${
-        workOrderRef ? ` (${workOrderRef})` : ""
-      }.`,
-      {
-        ...(priorDate ? { previousValue: priorDate } : {}),
-        newValue: payload.estimatedRepairDate,
-        ...(workOrderRef ? { workOrderRef } : {}),
-      }
-    ),
-  ];
-
-  const updated: Issue = {
-    ...base,
-    version: (base.version ?? 1) + 1,
-    status: "in_progress",
-    departmentId: dept.id,
-    assignedTeam,
-    workOrderRef: workOrderRef ?? base.workOrderRef,
-    projectId,
-    estimatedRepairDate: payload.estimatedRepairDate,
-    officialResponse: {
-      message: responseText,
-      respondedBy: userRef,
-      respondedAt: DEMO_NOW,
-      departmentId: dept.id,
-      assignedTeam,
-      workOrderRef,
-    },
-    deadlineHistory: [...(base.deadlineHistory ?? []), deadlineEntry],
-    updatedAt: DEMO_NOW,
-    history: [
-      ...base.history,
-      makeHistoryEvent(
+    const newEvents: AccountabilityEvent[] = [
+      makeAccountabilityEvent(
         base,
         user,
-        "in_progress",
-        `${dept.shortName} started repair (target ${payload.estimatedRepairDate})${
-          workOrderRef ? ` · ${workOrderRef}` : ""
-        }: ${responseText}`
+        "official_response",
+        responseText,
+        {
+          previousValue: ISSUE_STATUS_LABELS[base.status],
+          newValue: ISSUE_STATUS_LABELS.in_progress,
+          ...(projectId ? { projectId } : {}),
+          ...(workOrderRef ? { workOrderRef } : {}),
+        }
       ),
-    ],
-    accountabilityTimeline: [...(base.accountabilityTimeline ?? []), ...newEvents],
-  };
+      makeAccountabilityEvent(
+        base,
+        user,
+        priorDate ? "deadline_changed" : "deadline_set",
+        `Estimated repair completion set to ${payload.estimatedRepairDate}${
+          workOrderRef ? ` (${workOrderRef})` : ""
+        }.`,
+        {
+          ...(priorDate ? { previousValue: priorDate } : {}),
+          newValue: payload.estimatedRepairDate,
+          ...(workOrderRef ? { workOrderRef } : {}),
+        }
+      ),
+    ];
 
-  saveUpdatedIssue(updated);
-    notifyInBackground({
-    dedupeKey: `official_response:${updated.id}:${updated.version}`,
-    category: "official_response",
-    title: `Official response posted on ${updated.code}`,
-    message: `${user.name} (${dept.shortName}) mobilized repair targeting ${payload.estimatedRepairDate}.`,
-    href: `/civic-issues/${updated.id}`,
-    issueId: updated.id,
-    sectorId: updated.sectorId,
-    projectId: updated.projectId,
-    departmentId: updated.departmentId,
-    excludeUserId: user.id,
+    const updated: Issue = {
+      ...base,
+      version: (base.version ?? 1) + 1,
+      status: "in_progress",
+      departmentId: dept.id,
+      assignedTeam,
+      workOrderRef: workOrderRef ?? base.workOrderRef,
+      projectId,
+      estimatedRepairDate: payload.estimatedRepairDate,
+      officialResponse: {
+        message: responseText,
+        respondedBy: userRef,
+        respondedAt: DEMO_NOW,
+        departmentId: dept.id,
+        assignedTeam,
+        workOrderRef,
+      },
+      deadlineHistory: [...(base.deadlineHistory ?? []), deadlineEntry],
+      updatedAt: DEMO_NOW,
+      history: [
+        ...base.history,
+        makeHistoryEvent(
+          base,
+          user,
+          "in_progress",
+          `${dept.shortName} started repair (target ${payload.estimatedRepairDate})${
+            workOrderRef ? ` · ${workOrderRef}` : ""
+          }: ${responseText}`
+        ),
+      ],
+      accountabilityTimeline: [...(base.accountabilityTimeline ?? []), ...newEvents],
+    };
+
+    saveUpdatedIssueIn(store, updated);
+      notices.push({
+      dedupeKey: `official_response:${updated.id}:${updated.version}`,
+      category: "official_response",
+      title: `Official response posted on ${updated.code}`,
+      message: `${user.name} (${dept.shortName}) mobilized repair targeting ${payload.estimatedRepairDate}.`,
+      href: `/civic-issues/${updated.id}`,
+      issueId: updated.id,
+      sectorId: updated.sectorId,
+      projectId: updated.projectId,
+      departmentId: updated.departmentId,
+      excludeUserId: user.id,
+    });
+
+    return { ok: true, issue: updated };
   });
-
-  return { ok: true, issue: updated };
 }
 
 /** Update repair deadline with mandatory reason while preserving historical SLA breaches. */
@@ -1281,77 +1333,79 @@ export function extendIssueDeadline(
     expectedVersion?: number;
   }
 ): IssueMutationSuccess | MutationError {
-  const base = findIssue(id);
-  if (!base) return { ok: false, status: 404, error: `Unknown issue "${id}".` };
+  return withIssueStore<IssueMutationSuccess | MutationError>((store, notices) => {
+    const base = findIssueIn(store, id);
+    if (!base) return { ok: false, status: 404, error: `Unknown issue "${id}".` };
 
-  const stale = checkVersion(base, payload.expectedVersion);
-  if (stale) return stale;
+    const stale = checkVersion(base, payload.expectedVersion);
+    if (stale) return stale;
 
-  const perm = canUserPerform(user, "update_deadline", { issue: base });
-  if (!perm.allowed) return { ok: false, status: 403, error: perm.reason ?? "Forbidden." };
+    const perm = canUserPerform(user, "update_deadline", { issue: base });
+    if (!perm.allowed) return { ok: false, status: 403, error: perm.reason ?? "Forbidden." };
 
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(payload.newDate)) {
-    return { ok: false, status: 422, error: "Provide a valid YYYY-MM-DD deadline." };
-  }
-  const reason = payload.reason.trim();
-  if (reason.length < 8) {
-    return {
-      ok: false,
-      status: 422,
-      error: "A clear reason (at least 8 characters) is required to extend a deadline.",
-    };
-  }
-
-  const prev = base.estimatedRepairDate;
-  const breachedPrior = Boolean(
-    base.slaBreachedAt || (prev && prev < DEMO_NOW)
-  );
-
-  const deadlineChange = {
-    id: `DL-${base.id}-${(base.deadlineHistory?.length ?? 0) + 1}`,
-    ...(prev ? { previousDate: prev } : {}),
-    newDate: payload.newDate,
-    reason,
-    changedBy: toUserRef(user),
-    changedAt: DEMO_NOW,
-    breachedPriorDeadline: breachedPrior,
-  };
-
-  const timelineEvent = makeAccountabilityEvent(
-    base,
-    user,
-    "deadline_changed",
-    `Deadline revised to ${payload.newDate}: ${reason}`,
-    {
-      ...(prev ? { previousValue: prev } : {}),
-      newValue: payload.newDate,
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(payload.newDate)) {
+      return { ok: false, status: 422, error: "Provide a valid YYYY-MM-DD deadline." };
     }
-  );
+    const reason = payload.reason.trim();
+    if (reason.length < 8) {
+      return {
+        ok: false,
+        status: 422,
+        error: "A clear reason (at least 8 characters) is required to extend a deadline.",
+      };
+    }
 
-  const updated: Issue = {
-    ...base,
-    version: (base.version ?? 1) + 1,
-    estimatedRepairDate: payload.newDate,
-    slaBreachedAt: base.slaBreachedAt ?? (breachedPrior ? prev : undefined),
-    deadlineHistory: [...(base.deadlineHistory ?? []), deadlineChange],
-    updatedAt: DEMO_NOW,
-    accountabilityTimeline: [...(base.accountabilityTimeline ?? []), timelineEvent],
-  };
+    const prev = base.estimatedRepairDate;
+    const breachedPrior = Boolean(
+      base.slaBreachedAt || (prev && prev < DEMO_NOW)
+    );
 
-  saveUpdatedIssue(updated);
-    notifyInBackground({
-    dedupeKey: `deadline_change:${updated.id}:${updated.version}`,
-    category: "deadline_change",
-    title: `Repair deadline revised on ${updated.code}`,
-    message: `Target moved ${prev ?? "unscheduled"} → ${payload.newDate}. Reason: ${reason}`,
-    href: `/civic-issues/${updated.id}`,
-    issueId: updated.id,
-    sectorId: updated.sectorId,
-    projectId: updated.projectId,
-    excludeUserId: user.id,
+    const deadlineChange = {
+      id: `DL-${base.id}-${(base.deadlineHistory?.length ?? 0) + 1}`,
+      ...(prev ? { previousDate: prev } : {}),
+      newDate: payload.newDate,
+      reason,
+      changedBy: toUserRef(user),
+      changedAt: DEMO_NOW,
+      breachedPriorDeadline: breachedPrior,
+    };
+
+    const timelineEvent = makeAccountabilityEvent(
+      base,
+      user,
+      "deadline_changed",
+      `Deadline revised to ${payload.newDate}: ${reason}`,
+      {
+        ...(prev ? { previousValue: prev } : {}),
+        newValue: payload.newDate,
+      }
+    );
+
+    const updated: Issue = {
+      ...base,
+      version: (base.version ?? 1) + 1,
+      estimatedRepairDate: payload.newDate,
+      slaBreachedAt: base.slaBreachedAt ?? (breachedPrior ? prev : undefined),
+      deadlineHistory: [...(base.deadlineHistory ?? []), deadlineChange],
+      updatedAt: DEMO_NOW,
+      accountabilityTimeline: [...(base.accountabilityTimeline ?? []), timelineEvent],
+    };
+
+    saveUpdatedIssueIn(store, updated);
+      notices.push({
+      dedupeKey: `deadline_change:${updated.id}:${updated.version}`,
+      category: "deadline_change",
+      title: `Repair deadline revised on ${updated.code}`,
+      message: `Target moved ${prev ?? "unscheduled"} → ${payload.newDate}. Reason: ${reason}`,
+      href: `/civic-issues/${updated.id}`,
+      issueId: updated.id,
+      sectorId: updated.sectorId,
+      projectId: updated.projectId,
+      excludeUserId: user.id,
+    });
+
+    return { ok: true, issue: updated };
   });
-
-  return { ok: true, issue: updated };
 }
 
 /** In Progress -> Awaiting Verification (Official submits completed repair + mandatory evidence). */
@@ -1368,135 +1422,135 @@ export function submitRepairCompletion(
     expectedVersion?: number;
   }
 ): IssueMutationSuccess | MutationError {
-  const base = findIssue(id);
-  if (!base) return { ok: false, status: 404, error: `Unknown issue "${id}".` };
+  return withIssueStore<IssueMutationSuccess | MutationError>((store, notices) => {
+    const base = findIssueIn(store, id);
+    if (!base) return { ok: false, status: 404, error: `Unknown issue "${id}".` };
 
-  const stale = checkVersion(base, payload.expectedVersion);
-  if (stale) return stale;
+    const stale = checkVersion(base, payload.expectedVersion);
+    if (stale) return stale;
 
-  const perm = canUserPerform(user, "submit_repair", { issue: base });
-  if (!perm.allowed) return { ok: false, status: 403, error: perm.reason ?? "Forbidden." };
+    const perm = canUserPerform(user, "submit_repair", { issue: base });
+    if (!perm.allowed) return { ok: false, status: 403, error: perm.reason ?? "Forbidden." };
 
-  if (!isValidTransition(base.status, "awaiting_verification")) {
-    return {
-      ok: false,
-      status: 422,
-      error: `Cannot submit repair from status ${base.status}.`,
-    };
-  }
-
-  const notes = payload.resolutionNotes.trim();
-  const evidenceTitle = payload.evidenceTitle.trim();
-  if (notes.length < 10) {
-    return {
-      ok: false,
-      status: 422,
-      error: "Resolution notes (at least 10 characters) are mandatory.",
-    };
-  }
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(payload.completionDate)) {
-    return { ok: false, status: 422, error: "Provide a valid completion date." };
-  }
-  if (evidenceTitle.length < 4) {
-    return {
-      ok: false,
-      status: 422,
-      error: "Supporting repair evidence title is required before submitting for verification.",
-    };
-  }
-
-  const store = readStore();
-  const dept = getDepartmentForIssue(base);
-  const workOrderRef = payload.workOrderRef?.trim() || base.workOrderRef;
-  const attemptNumber = (base.repairAttempts?.length ?? 0) + 1;
-  const evidenceId = `EV-${base.id}-R${attemptNumber}-${Date.now().toString(36).slice(-4)}`;
-
-  const repairEvidence: Evidence = {
-    id: evidenceId,
-    kind: payload.photoDataUrl ? "photo" : "document",
-    title: evidenceTitle,
-    capturedAt: payload.completionDate,
-    uploadedAt: DEMO_NOW,
-    uploadedBy: toUserRef(user),
-    category: "official_repair",
-    status: "unverified",
-    issueId: base.id,
-    ...(base.projectId ? { projectId: base.projectId } : {}),
-    source: `${user.name} (${dept.shortName})`,
-    verified: false,
-    description:
-      payload.evidenceDescription?.trim() ||
-      `Official repair evidence submitted with Attempt #${attemptNumber}: ${notes}`,
-    ...(workOrderRef ? { ref: workOrderRef } : {}),
-    ...(payload.photoDataUrl ? { dataUrl: payload.photoDataUrl } : {}),
-    verificationHistory: [],
-  };
-
-  const attempt: RepairAttempt = {
-    id: `RA-${base.id}-${attemptNumber}`,
-    attemptNumber,
-    submittedBy: toUserRef(user),
-    submittedAt: DEMO_NOW,
-    completionDate: payload.completionDate,
-    resolutionNotes: notes,
-    ...(workOrderRef ? { workOrderRef } : {}),
-    evidenceIds: [evidenceId],
-  };
-
-  const timelineEvent = makeAccountabilityEvent(
-    base,
-    user,
-    "repair_submitted",
-    `Submitted Repair Attempt #${attemptNumber} (${payload.completionDate}): ${notes}`,
-    {
-      previousValue: ISSUE_STATUS_LABELS.in_progress,
-      newValue: ISSUE_STATUS_LABELS.awaiting_verification,
-      evidenceIds: [evidenceId],
-      ...(workOrderRef ? { workOrderRef } : {}),
+    if (!isValidTransition(base.status, "awaiting_verification")) {
+      return {
+        ok: false,
+        status: 422,
+        error: `Cannot submit repair from status ${base.status}.`,
+      };
     }
-  );
 
-  const updated: Issue = {
-    ...base,
-    version: (base.version ?? 1) + 1,
-    status: "awaiting_verification",
-    workOrderRef,
-    updatedAt: DEMO_NOW,
-    evidenceIds: [...base.evidenceIds, evidenceId],
-    repairAttempts: [...(base.repairAttempts ?? []), attempt],
-    history: [
-      ...base.history,
-      makeHistoryEvent(
-        base,
-        user,
-        "awaiting_verification",
-        `Repair #${attemptNumber} submitted by ${user.name} for independent verification.`
-      ),
-    ],
-    accountabilityTimeline: [...(base.accountabilityTimeline ?? []), timelineEvent],
-  };
+    const notes = payload.resolutionNotes.trim();
+    const evidenceTitle = payload.evidenceTitle.trim();
+    if (notes.length < 10) {
+      return {
+        ok: false,
+        status: 422,
+        error: "Resolution notes (at least 10 characters) are mandatory.",
+      };
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(payload.completionDate)) {
+      return { ok: false, status: 422, error: "Provide a valid completion date." };
+    }
+    if (evidenceTitle.length < 4) {
+      return {
+        ok: false,
+        status: 422,
+        error: "Supporting repair evidence title is required before submitting for verification.",
+      };
+    }
 
-  store.evidence.push(repairEvidence);
-  const createdIndex = store.created.findIndex((item) => item.id === updated.id);
-  if (createdIndex >= 0) store.created[createdIndex] = updated;
-  else store.overrides[updated.id] = updated;
-  writeStore(store);
+    const dept = getDepartmentForIssue(base);
+    const workOrderRef = payload.workOrderRef?.trim() || base.workOrderRef;
+    const attemptNumber = (base.repairAttempts?.length ?? 0) + 1;
+    const evidenceId = `EV-${base.id}-R${attemptNumber}-${Date.now().toString(36).slice(-4)}`;
+
+    const repairEvidence: Evidence = {
+      id: evidenceId,
+      kind: payload.photoDataUrl ? "photo" : "document",
+      title: evidenceTitle,
+      capturedAt: payload.completionDate,
+      uploadedAt: DEMO_NOW,
+      uploadedBy: toUserRef(user),
+      category: "official_repair",
+      status: "unverified",
+      issueId: base.id,
+      ...(base.projectId ? { projectId: base.projectId } : {}),
+      source: `${user.name} (${dept.shortName})`,
+      verified: false,
+      description:
+        payload.evidenceDescription?.trim() ||
+        `Official repair evidence submitted with Attempt #${attemptNumber}: ${notes}`,
+      ...(workOrderRef ? { ref: workOrderRef } : {}),
+      ...(payload.photoDataUrl ? { dataUrl: payload.photoDataUrl } : {}),
+      verificationHistory: [],
+    };
+
+    const attempt: RepairAttempt = {
+      id: `RA-${base.id}-${attemptNumber}`,
+      attemptNumber,
+      submittedBy: toUserRef(user),
+      submittedAt: DEMO_NOW,
+      completionDate: payload.completionDate,
+      resolutionNotes: notes,
+      ...(workOrderRef ? { workOrderRef } : {}),
+      evidenceIds: [evidenceId],
+    };
+
+    const timelineEvent = makeAccountabilityEvent(
+      base,
+      user,
+      "repair_submitted",
+      `Submitted Repair Attempt #${attemptNumber} (${payload.completionDate}): ${notes}`,
+      {
+        previousValue: ISSUE_STATUS_LABELS.in_progress,
+        newValue: ISSUE_STATUS_LABELS.awaiting_verification,
+        evidenceIds: [evidenceId],
+        ...(workOrderRef ? { workOrderRef } : {}),
+      }
+    );
+
+    const updated: Issue = {
+      ...base,
+      version: (base.version ?? 1) + 1,
+      status: "awaiting_verification",
+      workOrderRef,
+      updatedAt: DEMO_NOW,
+      evidenceIds: [...base.evidenceIds, evidenceId],
+      repairAttempts: [...(base.repairAttempts ?? []), attempt],
+      history: [
+        ...base.history,
+        makeHistoryEvent(
+          base,
+          user,
+          "awaiting_verification",
+          `Repair #${attemptNumber} submitted by ${user.name} for independent verification.`
+        ),
+      ],
+      accountabilityTimeline: [...(base.accountabilityTimeline ?? []), timelineEvent],
+    };
+
+    store.evidence.push(repairEvidence);
+    const createdIndex = store.created.findIndex((item) => item.id === updated.id);
+    if (createdIndex >= 0) store.created[createdIndex] = updated;
+    else store.overrides[updated.id] = updated;
 
   
-  notifyInBackground({
-    dedupeKey: `repair_submitted:${updated.id}:${attemptNumber}`,
-    category: "repair_submitted",
-    title: `${updated.code} awaiting independent verification`,
-    message: `${user.name} completed repair attempt #${attemptNumber}. Independent Civic Verifier inspection needed.`,
-    href: `/civic-issues/${updated.id}`,
-    issueId: updated.id,
-    sectorId: updated.sectorId,
-    projectId: updated.projectId,
-    targetRoles: ["verifier"],
-    excludeUserId: user.id,
-  });
+    notices.push({
+      dedupeKey: `repair_submitted:${updated.id}:${attemptNumber}`,
+      category: "repair_submitted",
+      title: `${updated.code} awaiting independent verification`,
+      message: `${user.name} completed repair attempt #${attemptNumber}. Independent Civic Verifier inspection needed.`,
+      href: `/civic-issues/${updated.id}`,
+      issueId: updated.id,
+      sectorId: updated.sectorId,
+      projectId: updated.projectId,
+      targetRoles: ["verifier"],
+      excludeUserId: user.id,
+    });
 
-  return { ok: true, issue: updated };
+    return { ok: true, issue: updated };
+  });
 }
 
 /** Awaiting Verification -> Resolved (Approved) or Reopened (Rejected) — Verifier only. */
@@ -1511,158 +1565,158 @@ export function inspectRepairSubmission(
     expectedVersion?: number;
   }
 ): IssueMutationSuccess | MutationError {
-  const base = findIssue(id);
-  if (!base) return { ok: false, status: 404, error: `Unknown issue "${id}".` };
+  return withIssueStore<IssueMutationSuccess | MutationError>((store, notices) => {
+    const base = findIssueIn(store, id);
+    if (!base) return { ok: false, status: 404, error: `Unknown issue "${id}".` };
 
-  const stale = checkVersion(base, payload.expectedVersion);
-  if (stale) return stale;
+    const stale = checkVersion(base, payload.expectedVersion);
+    if (stale) return stale;
 
-  const perm = canUserPerform(user, "inspect_repair", { issue: base });
-  if (!perm.allowed) return { ok: false, status: 403, error: perm.reason ?? "Forbidden." };
+    const perm = canUserPerform(user, "inspect_repair", { issue: base });
+    if (!perm.allowed) return { ok: false, status: 403, error: perm.reason ?? "Forbidden." };
 
-  const targetStatus: IssueStatus =
-    payload.decision === "approved" ? "resolved" : "reopened";
-  if (!isValidTransition(base.status, targetStatus)) {
-    return {
-      ok: false,
-      status: 422,
-      error: `Cannot move ${base.status} to ${targetStatus}.`,
-    };
-  }
-
-  const notes = payload.notes.trim();
-  if (notes.length < 8) {
-    return {
-      ok: false,
-      status: 422,
-      error: "Inspection notes (at least 8 characters) are required.",
-    };
-  }
-
-  const store = readStore();
-  const attempts = [...(base.repairAttempts ?? [])];
-  const latestIdx = attempts.length - 1;
-  const inspectionEvId = `EV-${base.id}-V${attempts.length || 1}-${Date.now().toString(36).slice(-4)}`;
-
-  const inspectionEvidence: Evidence = {
-    id: inspectionEvId,
-    kind: payload.photoDataUrl ? "photo" : "document",
-    title:
-      payload.evidenceTitle?.trim() ||
-      (payload.decision === "approved"
-        ? "Independent Repair Verification Sign-Off"
-        : "Independent Field Rejection Report"),
-    capturedAt: DEMO_NOW,
-    uploadedAt: DEMO_NOW,
-    uploadedBy: toUserRef(user),
-    category: "independent_verification",
-    status: "verified",
-    issueId: base.id,
-    ...(base.projectId ? { projectId: base.projectId } : {}),
-    source: `${user.name} (Civic Verifier)`,
-    verified: true,
-    verifiedBy: toUserRef(user),
-    verifiedAt: DEMO_NOW,
-    verificationReason: notes,
-    description: notes,
-    ...(payload.photoDataUrl ? { dataUrl: payload.photoDataUrl } : {}),
-    verificationHistory: [
-      {
-        id: `${inspectionEvId}-VH1`,
-        action: "verified",
-        actor: toUserRef(user),
-        at: DEMO_NOW,
-        reason: notes,
-      },
-    ],
-  };
-
-  if (latestIdx >= 0) {
-    attempts[latestIdx] = {
-      ...attempts[latestIdx],
-      verification: {
-        decision: payload.decision,
-        verifiedBy: toUserRef(user),
-        verifiedAt: DEMO_NOW,
-        notes,
-        evidenceIds: [inspectionEvId],
-      },
-    };
-  }
-
-  const timelineEvent = makeAccountabilityEvent(
-    base,
-    user,
-    payload.decision === "approved" ? "repair_approved" : "repair_rejected",
-    payload.decision === "approved"
-      ? `Independent verification approved repair: ${notes}`
-      : `Independent inspection rejected repair and reopened issue: ${notes}`,
-    {
-      previousValue: ISSUE_STATUS_LABELS.awaiting_verification,
-      newValue: ISSUE_STATUS_LABELS[targetStatus],
-      evidenceIds: [inspectionEvId],
+    const targetStatus: IssueStatus =
+      payload.decision === "approved" ? "resolved" : "reopened";
+    if (!isValidTransition(base.status, targetStatus)) {
+      return {
+        ok: false,
+        status: 422,
+        error: `Cannot move ${base.status} to ${targetStatus}.`,
+      };
     }
-  );
 
-  const missedDeadline = Boolean(
-    base.slaBreachedAt ||
-      (base.estimatedRepairDate && DEMO_NOW > base.estimatedRepairDate)
-  );
+    const notes = payload.notes.trim();
+    if (notes.length < 8) {
+      return {
+        ok: false,
+        status: 422,
+        error: "Inspection notes (at least 8 characters) are required.",
+      };
+    }
 
-  const updated: Issue = {
-    ...base,
-    version: (base.version ?? 1) + 1,
-    status: targetStatus,
-    updatedAt: DEMO_NOW,
-    resolvedAt: payload.decision === "approved" ? DEMO_NOW : undefined,
-    resolutionVerification:
-      payload.decision === "approved" ? "verified" : base.resolutionVerification,
-    slaBreachedAt:
-      base.slaBreachedAt ?? (missedDeadline ? base.estimatedRepairDate : undefined),
-    evidenceIds: [...base.evidenceIds, inspectionEvId],
-    repairAttempts: attempts,
-    history: [
-      ...base.history,
-      makeHistoryEvent(
-        base,
-        user,
-        targetStatus,
-        payload.decision === "approved"
-          ? `Verified resolved by ${user.name}: ${notes}`
-          : `Repair rejected by ${user.name} and reopened: ${notes}`
-      ),
-    ],
-    accountabilityTimeline: [...(base.accountabilityTimeline ?? []), timelineEvent],
-  };
+    const attempts = [...(base.repairAttempts ?? [])];
+    const latestIdx = attempts.length - 1;
+    const inspectionEvId = `EV-${base.id}-V${attempts.length || 1}-${Date.now().toString(36).slice(-4)}`;
 
-  store.evidence.push(inspectionEvidence);
-  const createdIndex = store.created.findIndex((item) => item.id === updated.id);
-  if (createdIndex >= 0) store.created[createdIndex] = updated;
-  else store.overrides[updated.id] = updated;
-  writeStore(store);
+    const inspectionEvidence: Evidence = {
+      id: inspectionEvId,
+      kind: payload.photoDataUrl ? "photo" : "document",
+      title:
+        payload.evidenceTitle?.trim() ||
+        (payload.decision === "approved"
+          ? "Independent Repair Verification Sign-Off"
+          : "Independent Field Rejection Report"),
+      capturedAt: DEMO_NOW,
+      uploadedAt: DEMO_NOW,
+      uploadedBy: toUserRef(user),
+      category: "independent_verification",
+      status: "verified",
+      issueId: base.id,
+      ...(base.projectId ? { projectId: base.projectId } : {}),
+      source: `${user.name} (Civic Verifier)`,
+      verified: true,
+      verifiedBy: toUserRef(user),
+      verifiedAt: DEMO_NOW,
+      verificationReason: notes,
+      description: notes,
+      ...(payload.photoDataUrl ? { dataUrl: payload.photoDataUrl } : {}),
+      verificationHistory: [
+        {
+          id: `${inspectionEvId}-VH1`,
+          action: "verified",
+          actor: toUserRef(user),
+          at: DEMO_NOW,
+          reason: notes,
+        },
+      ],
+    };
+
+    if (latestIdx >= 0) {
+      attempts[latestIdx] = {
+        ...attempts[latestIdx],
+        verification: {
+          decision: payload.decision,
+          verifiedBy: toUserRef(user),
+          verifiedAt: DEMO_NOW,
+          notes,
+          evidenceIds: [inspectionEvId],
+        },
+      };
+    }
+
+    const timelineEvent = makeAccountabilityEvent(
+      base,
+      user,
+      payload.decision === "approved" ? "repair_approved" : "repair_rejected",
+      payload.decision === "approved"
+        ? `Independent verification approved repair: ${notes}`
+        : `Independent inspection rejected repair and reopened issue: ${notes}`,
+      {
+        previousValue: ISSUE_STATUS_LABELS.awaiting_verification,
+        newValue: ISSUE_STATUS_LABELS[targetStatus],
+        evidenceIds: [inspectionEvId],
+      }
+    );
+
+    const missedDeadline = Boolean(
+      base.slaBreachedAt ||
+        (base.estimatedRepairDate && DEMO_NOW > base.estimatedRepairDate)
+    );
+
+    const updated: Issue = {
+      ...base,
+      version: (base.version ?? 1) + 1,
+      status: targetStatus,
+      updatedAt: DEMO_NOW,
+      resolvedAt: payload.decision === "approved" ? DEMO_NOW : undefined,
+      resolutionVerification:
+        payload.decision === "approved" ? "verified" : base.resolutionVerification,
+      slaBreachedAt:
+        base.slaBreachedAt ?? (missedDeadline ? base.estimatedRepairDate : undefined),
+      evidenceIds: [...base.evidenceIds, inspectionEvId],
+      repairAttempts: attempts,
+      history: [
+        ...base.history,
+        makeHistoryEvent(
+          base,
+          user,
+          targetStatus,
+          payload.decision === "approved"
+            ? `Verified resolved by ${user.name}: ${notes}`
+            : `Repair rejected by ${user.name} and reopened: ${notes}`
+        ),
+      ],
+      accountabilityTimeline: [...(base.accountabilityTimeline ?? []), timelineEvent],
+    };
+
+    store.evidence.push(inspectionEvidence);
+    const createdIndex = store.created.findIndex((item) => item.id === updated.id);
+    if (createdIndex >= 0) store.created[createdIndex] = updated;
+    else store.overrides[updated.id] = updated;
 
   
-  notifyInBackground({
-    dedupeKey: `inspection:${updated.id}:${updated.version}`,
-    category:
-      payload.decision === "approved" ? "verification_outcome" : "reopened_issue",
-    title:
-      payload.decision === "approved"
-        ? `${updated.code} verified resolved`
-        : `${updated.code} verification rejected — Reopened`,
-    message: `${user.name} ${
-      payload.decision === "approved" ? "certified the completed repair" : "rejected the repair submission"
-    }: ${notes}`,
-    href: `/civic-issues/${updated.id}`,
-    issueId: updated.id,
-    sectorId: updated.sectorId,
-    projectId: updated.projectId,
-    departmentId: updated.departmentId,
-    targetRoles: ["official"],
-    excludeUserId: user.id,
-  });
+    notices.push({
+      dedupeKey: `inspection:${updated.id}:${updated.version}`,
+      category:
+        payload.decision === "approved" ? "verification_outcome" : "reopened_issue",
+      title:
+        payload.decision === "approved"
+          ? `${updated.code} verified resolved`
+          : `${updated.code} verification rejected — Reopened`,
+      message: `${user.name} ${
+        payload.decision === "approved" ? "certified the completed repair" : "rejected the repair submission"
+      }: ${notes}`,
+      href: `/civic-issues/${updated.id}`,
+      issueId: updated.id,
+      sectorId: updated.sectorId,
+      projectId: updated.projectId,
+      departmentId: updated.departmentId,
+      targetRoles: ["official"],
+      excludeUserId: user.id,
+    });
 
-  return { ok: true, issue: updated };
+    return { ok: true, issue: updated };
+  });
 }
 
 /** Citizen / Verifier submits recurrence request against a Resolved issue without mutating official status yet. */
@@ -1675,94 +1729,94 @@ export function submitRecurrenceRequest(
     expectedVersion?: number;
   }
 ): IssueMutationSuccess | MutationError {
-  const base = findIssue(id);
-  if (!base) return { ok: false, status: 404, error: `Unknown issue "${id}".` };
+  return withIssueStore<IssueMutationSuccess | MutationError>((store, notices) => {
+    const base = findIssueIn(store, id);
+    if (!base) return { ok: false, status: 404, error: `Unknown issue "${id}".` };
 
-  const stale = checkVersion(base, payload.expectedVersion);
-  if (stale) return stale;
+    const stale = checkVersion(base, payload.expectedVersion);
+    if (stale) return stale;
 
-  const perm = canUserPerform(user, "submit_recurrence", { issue: base });
-  if (!perm.allowed) return { ok: false, status: 403, error: perm.reason ?? "Forbidden." };
+    const perm = canUserPerform(user, "submit_recurrence", { issue: base });
+    if (!perm.allowed) return { ok: false, status: 403, error: perm.reason ?? "Forbidden." };
 
-  const reason = payload.reason.trim();
-  if (reason.length < 10) {
-    return {
-      ok: false,
-      status: 422,
-      error: "Describe why the problem has returned (at least 10 characters).",
+    const reason = payload.reason.trim();
+    if (reason.length < 10) {
+      return {
+        ok: false,
+        status: 422,
+        error: "Describe why the problem has returned (at least 10 characters).",
+      };
+    }
+
+    const evidenceIds: string[] = [];
+    if (payload.photoDataUrl) {
+      const evId = `EV-${base.id}-REC-${Date.now().toString(36).slice(-4)}`;
+      store.evidence.push({
+        id: evId,
+        kind: "photo",
+        title: "Recurrence report evidence",
+        capturedAt: DEMO_NOW,
+        uploadedAt: DEMO_NOW,
+        uploadedBy: toUserRef(user),
+        category: "citizen_report",
+        status: "unverified",
+        issueId: base.id,
+        ...(base.projectId ? { projectId: base.projectId } : {}),
+        source: `${user.name} (${user.role})`,
+        verified: false,
+        description: `Submitted alongside recurrence request: ${reason}`,
+        dataUrl: payload.photoDataUrl,
+        verificationHistory: [],
+      });
+      evidenceIds.push(evId);
+    }
+
+    const req: RecurrenceRequest = {
+      id: `REC-${base.id}-${(base.recurrenceRequests?.length ?? 0) + 1}`,
+      requestedBy: toUserRef(user),
+      requestedAt: DEMO_NOW,
+      reason,
+      evidenceIds,
+      status: "pending",
     };
-  }
 
-  const store = readStore();
-  const evidenceIds: string[] = [];
-  if (payload.photoDataUrl) {
-    const evId = `EV-${base.id}-REC-${Date.now().toString(36).slice(-4)}`;
-    store.evidence.push({
-      id: evId,
-      kind: "photo",
-      title: "Recurrence report evidence",
-      capturedAt: DEMO_NOW,
-      uploadedAt: DEMO_NOW,
-      uploadedBy: toUserRef(user),
-      category: "citizen_report",
-      status: "unverified",
-      issueId: base.id,
-      ...(base.projectId ? { projectId: base.projectId } : {}),
-      source: `${user.name} (${user.role})`,
-      verified: false,
-      description: `Submitted alongside recurrence request: ${reason}`,
-      dataUrl: payload.photoDataUrl,
-      verificationHistory: [],
-    });
-    evidenceIds.push(evId);
-  }
+    const timelineEvent = makeAccountabilityEvent(
+      base,
+      user,
+      "recurrence_requested",
+      `Recurrence report submitted pending independent verification: ${reason}`,
+      ...(evidenceIds.length > 0 ? [{ evidenceIds }] : [])
+    );
 
-  const req: RecurrenceRequest = {
-    id: `REC-${base.id}-${(base.recurrenceRequests?.length ?? 0) + 1}`,
-    requestedBy: toUserRef(user),
-    requestedAt: DEMO_NOW,
-    reason,
-    evidenceIds,
-    status: "pending",
-  };
+    const updated: Issue = {
+      ...base,
+      version: (base.version ?? 1) + 1,
+      updatedAt: DEMO_NOW,
+      evidenceIds: [...base.evidenceIds, ...evidenceIds],
+      recurrenceRequests: [...(base.recurrenceRequests ?? []), req],
+      accountabilityTimeline: [...(base.accountabilityTimeline ?? []), timelineEvent],
+    };
 
-  const timelineEvent = makeAccountabilityEvent(
-    base,
-    user,
-    "recurrence_requested",
-    `Recurrence report submitted pending independent verification: ${reason}`,
-    ...(evidenceIds.length > 0 ? [{ evidenceIds }] : [])
-  );
-
-  const updated: Issue = {
-    ...base,
-    version: (base.version ?? 1) + 1,
-    updatedAt: DEMO_NOW,
-    evidenceIds: [...base.evidenceIds, ...evidenceIds],
-    recurrenceRequests: [...(base.recurrenceRequests ?? []), req],
-    accountabilityTimeline: [...(base.accountabilityTimeline ?? []), timelineEvent],
-  };
-
-  const createdIndex = store.created.findIndex((item) => item.id === updated.id);
-  if (createdIndex >= 0) store.created[createdIndex] = updated;
-  else store.overrides[updated.id] = updated;
-  writeStore(store);
+    const createdIndex = store.created.findIndex((item) => item.id === updated.id);
+    if (createdIndex >= 0) store.created[createdIndex] = updated;
+    else store.overrides[updated.id] = updated;
 
   
-  notifyInBackground({
-    dedupeKey: `recurrence_req:${updated.id}:${req.id}`,
-    category: "status_update",
-    title: `Recurrence request filed on ${updated.code}`,
-    message: `${user.name} reported problem recurrence on "${updated.title}". Civic Verifier review needed.`,
-    href: `/civic-issues/${updated.id}`,
-    issueId: updated.id,
-    sectorId: updated.sectorId,
-    projectId: updated.projectId,
-    targetRoles: ["verifier"],
-    excludeUserId: user.id,
-  });
+    notices.push({
+      dedupeKey: `recurrence_req:${updated.id}:${req.id}`,
+      category: "status_update",
+      title: `Recurrence request filed on ${updated.code}`,
+      message: `${user.name} reported problem recurrence on "${updated.title}". Civic Verifier review needed.`,
+      href: `/civic-issues/${updated.id}`,
+      issueId: updated.id,
+      sectorId: updated.sectorId,
+      projectId: updated.projectId,
+      targetRoles: ["verifier"],
+      excludeUserId: user.id,
+    });
 
-  return { ok: true, issue: updated };
+    return { ok: true, issue: updated };
+  });
 }
 
 /** Verifier approves (reopening issue) or rejects a pending recurrence request. */
@@ -1776,95 +1830,97 @@ export function reviewRecurrenceRequest(
     expectedVersion?: number;
   }
 ): IssueMutationSuccess | MutationError {
-  const base = findIssue(id);
-  if (!base) return { ok: false, status: 404, error: `Unknown issue "${id}".` };
+  return withIssueStore<IssueMutationSuccess | MutationError>((store, notices) => {
+    const base = findIssueIn(store, id);
+    if (!base) return { ok: false, status: 404, error: `Unknown issue "${id}".` };
 
-  const stale = checkVersion(base, payload.expectedVersion);
-  if (stale) return stale;
+    const stale = checkVersion(base, payload.expectedVersion);
+    if (stale) return stale;
 
-  const perm = canUserPerform(user, "review_recurrence", { issue: base });
-  if (!perm.allowed) return { ok: false, status: 403, error: perm.reason ?? "Forbidden." };
+    const perm = canUserPerform(user, "review_recurrence", { issue: base });
+    if (!perm.allowed) return { ok: false, status: 403, error: perm.reason ?? "Forbidden." };
 
-  const requests = [...(base.recurrenceRequests ?? [])];
-  const idx = requests.findIndex((r) => r.id === requestId && r.status === "pending");
-  if (idx < 0) {
-    return { ok: false, status: 404, error: "Pending recurrence request not found." };
-  }
+    const requests = [...(base.recurrenceRequests ?? [])];
+    const idx = requests.findIndex((r) => r.id === requestId && r.status === "pending");
+    if (idx < 0) {
+      return { ok: false, status: 404, error: "Pending recurrence request not found." };
+    }
 
-  const notes = payload.reviewNotes.trim();
-  if (notes.length < 8) {
-    return {
-      ok: false,
-      status: 422,
-      error: "Review notes (at least 8 characters) are required.",
+    const notes = payload.reviewNotes.trim();
+    if (notes.length < 8) {
+      return {
+        ok: false,
+        status: 422,
+        error: "Review notes (at least 8 characters) are required.",
+      };
+    }
+
+    requests[idx] = {
+      ...requests[idx],
+      status: payload.decision,
+      reviewedBy: toUserRef(user),
+      reviewedAt: DEMO_NOW,
+      reviewNotes: notes,
     };
-  }
 
-  requests[idx] = {
-    ...requests[idx],
-    status: payload.decision,
-    reviewedBy: toUserRef(user),
-    reviewedAt: DEMO_NOW,
-    reviewNotes: notes,
-  };
+    const approved = payload.decision === "approved";
+    const timelineEvent = makeAccountabilityEvent(
+      base,
+      user,
+      approved ? "issue_reopened" : "status_changed",
+      approved
+        ? `Substantiated recurrence request approved — issue reopened: ${notes}`
+        : `Recurrence request declined after inspection: ${notes}`,
+      approved
+        ? {
+            previousValue: ISSUE_STATUS_LABELS.resolved,
+            newValue: ISSUE_STATUS_LABELS.reopened,
+          }
+        : undefined
+    );
 
-  const approved = payload.decision === "approved";
-  const timelineEvent = makeAccountabilityEvent(
-    base,
-    user,
-    approved ? "issue_reopened" : "status_changed",
-    approved
-      ? `Substantiated recurrence request approved — issue reopened: ${notes}`
-      : `Recurrence request declined after inspection: ${notes}`,
-    approved
-      ? {
-          previousValue: ISSUE_STATUS_LABELS.resolved,
-          newValue: ISSUE_STATUS_LABELS.reopened,
-        }
-      : undefined
-  );
+    const updated: Issue = {
+      ...base,
+      version: (base.version ?? 1) + 1,
+      status: approved ? "reopened" : base.status,
+      resolvedAt: approved ? undefined : base.resolvedAt,
+      updatedAt: DEMO_NOW,
+      recurrenceRequests: requests,
+      history: approved
+        ? [
+            ...base.history,
+            makeHistoryEvent(
+              base,
+              user,
+              "reopened",
+              `Reopened by ${user.name} after substantiated recurrence report: ${notes}`
+            ),
+          ]
+        : base.history,
+      accountabilityTimeline: [...(base.accountabilityTimeline ?? []), timelineEvent],
+    };
 
-  const updated: Issue = {
-    ...base,
-    version: (base.version ?? 1) + 1,
-    status: approved ? "reopened" : base.status,
-    resolvedAt: approved ? undefined : base.resolvedAt,
-    updatedAt: DEMO_NOW,
-    recurrenceRequests: requests,
-    history: approved
-      ? [
-          ...base.history,
-          makeHistoryEvent(
-            base,
-            user,
-            "reopened",
-            `Reopened by ${user.name} after substantiated recurrence report: ${notes}`
-          ),
-        ]
-      : base.history,
-    accountabilityTimeline: [...(base.accountabilityTimeline ?? []), timelineEvent],
-  };
+    saveUpdatedIssueIn(store, updated);
 
-  saveUpdatedIssue(updated);
+    if (approved) {
+          notices.push({
+        dedupeKey: `recurrence_reopened:${updated.id}:${requestId}`,
+        category: "reopened_issue",
+        title: `${updated.code} reopened after recurrence review`,
+        message: `${user.name} substantiated recurrence and reopened the issue for department action.`,
+        href: `/civic-issues/${updated.id}`,
+        issueId: updated.id,
+        sectorId: updated.sectorId,
+        projectId: updated.projectId,
+        departmentId: updated.departmentId,
+        targetRoles: ["official"],
+        explicitUserIds: [requests[idx].requestedBy.id],
+        excludeUserId: user.id,
+      });
+    }
 
-  if (approved) {
-        notifyInBackground({
-      dedupeKey: `recurrence_reopened:${updated.id}:${requestId}`,
-      category: "reopened_issue",
-      title: `${updated.code} reopened after recurrence review`,
-      message: `${user.name} substantiated recurrence and reopened the issue for department action.`,
-      href: `/civic-issues/${updated.id}`,
-      issueId: updated.id,
-      sectorId: updated.sectorId,
-      projectId: updated.projectId,
-      departmentId: updated.departmentId,
-      targetRoles: ["official"],
-      explicitUserIds: [requests[idx].requestedBy.id],
-      excludeUserId: user.id,
-    });
-  }
-
-  return { ok: true, issue: updated };
+    return { ok: true, issue: updated };
+  });
 }
 
 /** Verifier verifies, flags, or revokes verification of an Evidence item (no self-verification!). */
@@ -1876,83 +1932,83 @@ export function moderateEvidence(
     reason: string;
   }
 ): { ok: true; evidence: Evidence } | MutationError {
-  const existing = findRuntimeEvidence(evidenceId);
-  if (!existing) {
-    return { ok: false, status: 404, error: `Unknown evidence "${evidenceId}".` };
-  }
+  return withIssueStore<{ ok: true; evidence: Evidence } | MutationError>((store, notices) => {
+    const existing = findEvidenceIn(store, evidenceId);
+    if (!existing) {
+      return { ok: false, status: 404, error: `Unknown evidence "${evidenceId}".` };
+    }
 
-  const permAction =
-    payload.action === "verified"
-      ? "verify_evidence"
-      : payload.action === "flagged"
-        ? "flag_evidence"
-        : "revoke_evidence";
-
-  const perm = canUserPerform(user, permAction, { evidence: existing });
-  if (!perm.allowed) return { ok: false, status: 403, error: perm.reason ?? "Forbidden." };
-
-  const reason = payload.reason.trim();
-  if (reason.length < 5) {
-    return {
-      ok: false,
-      status: 422,
-      error: "A recorded verification or flagging reason (at least 5 characters) is mandatory.",
-    };
-  }
-
-  const nextStatus: EvidenceVerificationStatus =
-    payload.action === "verified"
-      ? "verified"
-      : payload.action === "flagged"
-        ? "flagged"
-        : "unverified";
-
-  const event = {
-    id: `${evidenceId}-VH-${(existing.verificationHistory?.length ?? 0) + 1}`,
-    action: payload.action,
-    actor: toUserRef(user),
-    at: DEMO_NOW,
-    reason,
-  };
-
-  const updatedEvidence: Evidence = {
-    ...existing,
-    status: nextStatus,
-    verified: nextStatus === "verified",
-    verifiedBy: nextStatus === "unverified" ? undefined : toUserRef(user),
-    verifiedAt: nextStatus === "unverified" ? undefined : DEMO_NOW,
-    verificationReason: reason,
-    verificationHistory: [...(existing.verificationHistory ?? []), event],
-  };
-
-  const store = readStore();
-  store.evidenceOverrides[evidenceId] = updatedEvidence;
-
-  // Record in linked issue accountability timeline if attached to an issue
-  const linkedIssue = listIssues().find((iss) => iss.evidenceIds.includes(evidenceId));
-  if (linkedIssue) {
-    const timelineEvent = makeAccountabilityEvent(
-      linkedIssue,
-      user,
+    const permAction =
       payload.action === "verified"
-        ? "evidence_verified"
+        ? "verify_evidence"
         : payload.action === "flagged"
-          ? "evidence_flagged"
-          : "evidence_revoked",
-      `Evidence "${existing.title}" marked ${nextStatus}: ${reason}`,
-      { evidenceIds: [evidenceId] }
-    );
-    const updatedIssue: Issue = {
-      ...linkedIssue,
-      version: (linkedIssue.version ?? 1) + 1,
-      updatedAt: DEMO_NOW,
-      accountabilityTimeline: [...(linkedIssue.accountabilityTimeline ?? []), timelineEvent],
-    };
-    const createdIndex = store.created.findIndex((item) => item.id === updatedIssue.id);
-    if (createdIndex >= 0) store.created[createdIndex] = updatedIssue;
-    else store.overrides[updatedIssue.id] = updatedIssue;
-  }
+          ? "flag_evidence"
+          : "revoke_evidence";
 
-  writeStore(store);
-  return { ok: true, evidence: updatedEvidence };
+    const perm = canUserPerform(user, permAction, { evidence: existing });
+    if (!perm.allowed) return { ok: false, status: 403, error: perm.reason ?? "Forbidden." };
+
+    const reason = payload.reason.trim();
+    if (reason.length < 5) {
+      return {
+        ok: false,
+        status: 422,
+        error: "A recorded verification or flagging reason (at least 5 characters) is mandatory.",
+      };
+    }
+
+    const nextStatus: EvidenceVerificationStatus =
+      payload.action === "verified"
+        ? "verified"
+        : payload.action === "flagged"
+          ? "flagged"
+          : "unverified";
+
+    const event = {
+      id: `${evidenceId}-VH-${(existing.verificationHistory?.length ?? 0) + 1}`,
+      action: payload.action,
+      actor: toUserRef(user),
+      at: DEMO_NOW,
+      reason,
+    };
+
+    const updatedEvidence: Evidence = {
+      ...existing,
+      status: nextStatus,
+      verified: nextStatus === "verified",
+      verifiedBy: nextStatus === "unverified" ? undefined : toUserRef(user),
+      verifiedAt: nextStatus === "unverified" ? undefined : DEMO_NOW,
+      verificationReason: reason,
+      verificationHistory: [...(existing.verificationHistory ?? []), event],
+    };
+
+    store.evidenceOverrides[evidenceId] = updatedEvidence;
+
+    // Record in linked issue accountability timeline if attached to an issue
+    const linkedIssue = issuesFrom(store).find((iss) => iss.evidenceIds.includes(evidenceId));
+    if (linkedIssue) {
+      const timelineEvent = makeAccountabilityEvent(
+        linkedIssue,
+        user,
+        payload.action === "verified"
+          ? "evidence_verified"
+          : payload.action === "flagged"
+            ? "evidence_flagged"
+            : "evidence_revoked",
+        `Evidence "${existing.title}" marked ${nextStatus}: ${reason}`,
+        { evidenceIds: [evidenceId] }
+      );
+      const updatedIssue: Issue = {
+        ...linkedIssue,
+        version: (linkedIssue.version ?? 1) + 1,
+        updatedAt: DEMO_NOW,
+        accountabilityTimeline: [...(linkedIssue.accountabilityTimeline ?? []), timelineEvent],
+      };
+      const createdIndex = store.created.findIndex((item) => item.id === updatedIssue.id);
+      if (createdIndex >= 0) store.created[createdIndex] = updatedIssue;
+      else store.overrides[updatedIssue.id] = updatedIssue;
+    }
+
+    return { ok: true, evidence: updatedEvidence };
+  });
 }
