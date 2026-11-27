@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { compressImageFile, ImageCompressionError } from "@/utils/compressImage";
 import {
   AlertCircle,
   CalendarClock,
@@ -80,6 +81,9 @@ export default function IssueGovernanceConsole({
     "Post-repair completion photograph"
   );
   const [photoDataUrl, setPhotoDataUrl] = useState<string | undefined>(undefined);
+  const [preparingPhoto, setPreparingPhoto] = useState(false);
+  // Increments on every pick, so a slow earlier photo can't replace a newer choice.
+  const photoPickRef = useRef(0);
 
   // Verifier Inspection
   const [inspectionNotes, setInspectionNotes] = useState("");
@@ -115,22 +119,27 @@ export default function IssueGovernanceConsole({
     }
   };
 
-  const onPickPhoto = (file: File | null) => {
+  const onPickPhoto = async (file: File | null) => {
     if (!file) return;
-    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
-      setError("Choose a JPG, PNG or WebP photo.");
-      return;
-    }
-    if (file.size > 1_500_000) {
-      setError("That photo is larger than 1.5 MB. Choose a smaller file.");
-      return;
-    }
+    const pick = ++photoPickRef.current;
     setError(null);
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === "string") setPhotoDataUrl(reader.result);
-    };
-    reader.readAsDataURL(file);
+    // Any phone photo works: resized to 1600 px JPEG (metadata stripped) before upload.
+    setPreparingPhoto(true);
+    try {
+      const dataUrl = await compressImageFile(file);
+      if (pick === photoPickRef.current) setPhotoDataUrl(dataUrl);
+    } catch (caught) {
+      if (pick !== photoPickRef.current) return;
+      setPhotoDataUrl(undefined);
+      if (fileRef.current) fileRef.current.value = "";
+      setError(
+        caught instanceof ImageCompressionError
+          ? caught.message
+          : "This photo couldn't be prepared. Try another one."
+      );
+    } finally {
+      if (pick === photoPickRef.current) setPreparingPhoto(false);
+    }
   };
 
   const fieldCls =
@@ -238,7 +247,7 @@ export default function IssueGovernanceConsole({
             />
             <button
               type="button"
-              disabled={busy}
+              disabled={busy || preparingPhoto}
               onClick={() =>
                 void sendPatch(
                   { action: "review", note: reviewNote },
@@ -366,7 +375,7 @@ export default function IssueGovernanceConsole({
 
             <button
               type="submit"
-              disabled={busy}
+              disabled={busy || preparingPhoto}
               className="inline-flex items-center justify-center gap-1.5 rounded-full bg-[#007AFF] px-4 py-2 text-[12.5px] font-semibold text-white shadow-xs hover:bg-[#0066D6] disabled:opacity-60 cursor-pointer"
             >
               {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
@@ -421,7 +430,7 @@ export default function IssueGovernanceConsole({
                     />
                     <button
                       type="button"
-                      disabled={busy}
+                      disabled={busy || preparingPhoto}
                       onClick={() =>
                         void sendPatch(
                           {
@@ -509,19 +518,24 @@ export default function IssueGovernanceConsole({
 
               <label className="flex cursor-pointer items-center justify-center gap-1.5 rounded-[10px] border border-dashed border-black/[0.15] bg-white/75 px-3 py-2 text-[11.5px] font-medium text-[#6E6E73] hover:text-[#007AFF]">
                 <Camera className="h-3.5 w-3.5" />
-                {photoDataUrl ? "Photo attached" : "Attach repair photo (optional)"}
+                {preparingPhoto
+                  ? "Preparing photo…"
+                  : photoDataUrl
+                    ? "Photo attached"
+                    : "Attach repair photo (optional)"}
                 <input
                   ref={fileRef}
                   type="file"
-                  accept="image/jpeg,image/png,image/webp"
+                  accept="image/*"
+                  disabled={preparingPhoto}
                   className="sr-only"
-                  onChange={(e) => onPickPhoto(e.target.files?.[0] ?? null)}
+                  onChange={(e) => void onPickPhoto(e.target.files?.[0] ?? null)}
                 />
               </label>
 
               <button
                 type="submit"
-                disabled={busy}
+                disabled={busy || preparingPhoto}
                 className="inline-flex items-center justify-center gap-1.5 rounded-full bg-[#007AFF] px-4 py-2 text-[12.5px] font-semibold text-white shadow-xs hover:bg-[#0066D6] disabled:opacity-60 cursor-pointer"
               >
                 {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
@@ -577,7 +591,7 @@ export default function IssueGovernanceConsole({
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
-                disabled={busy}
+                disabled={busy || preparingPhoto}
                 onClick={() =>
                   void sendPatch(
                     {
@@ -596,7 +610,7 @@ export default function IssueGovernanceConsole({
               </button>
               <button
                 type="button"
-                disabled={busy}
+                disabled={busy || preparingPhoto}
                 onClick={() =>
                   void sendPatch(
                     {
@@ -667,7 +681,7 @@ export default function IssueGovernanceConsole({
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       type="button"
-                      disabled={busy}
+                      disabled={busy || preparingPhoto}
                       onClick={() =>
                         void sendPatch(
                           {
@@ -685,7 +699,7 @@ export default function IssueGovernanceConsole({
                     </button>
                     <button
                       type="button"
-                      disabled={busy}
+                      disabled={busy || preparingPhoto}
                       onClick={() =>
                         void sendPatch(
                           {
@@ -733,7 +747,7 @@ export default function IssueGovernanceConsole({
               />
               <button
                 type="button"
-                disabled={busy}
+                disabled={busy || preparingPhoto}
                 onClick={() =>
                   void sendPatch(
                     { action: "submit_recurrence", reason: recurrenceReason },

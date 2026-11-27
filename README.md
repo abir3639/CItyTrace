@@ -26,6 +26,25 @@ cp .env.example .env.local
 Without a key the product is fully functional: the AI layer falls back to the
 deterministic rules engine, and the UI labels which engine produced each answer.
 
+### Persistence (required for any hosted deployment)
+
+Citizen reports, status changes, evidence, watchlists and notifications are kept
+in Supabase (Postgres + Storage), so they survive serverless cold starts and are
+shared by every user. Without Supabase credentials the app falls back to local
+temp files — fine for `npm run dev` or an offline laptop demo, but data is lost
+on Vercel.
+
+1. Create a Supabase project (free tier) and run [`supabase/setup.sql`](supabase/setup.sql)
+   in its SQL Editor. It creates the `app_state` table and the `issue-photos` bucket.
+2. In `.env.local` (and in Vercel → Environment Variables), set:
+   - `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` — Settings → API. Server-only; never commit.
+   - `CITYTRACE_AUTH_SECRET` — signs session cookies (`openssl rand -base64 32`).
+     **Required on Vercel**: sign-in refuses to run there without it.
+
+Photos are resized in the browser (max 1600 px JPEG), which also strips GPS
+location and other metadata, then validated by file signature on the server
+and stored under random file names.
+
 ---
 
 ## The demo journey
@@ -123,5 +142,7 @@ npm run start       # serve the production build
 npm run lint        # ESLint (Next 16 removed `next lint`)
 npm run typecheck   # tsc --noEmit
 npm run check:links # crawl the running app for broken internal links
-npm run reset:demo  # clear citizen reports and status changes
+npm run reset:demo  # clear reports, status changes, notifications and photos
+                    # (local temp files + Supabase from .env.local)
+npm run reset:demo -- --env=.env.prod --yes   # reset another environment, e.g. production
 ```

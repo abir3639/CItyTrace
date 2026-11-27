@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { compressImageFile, ImageCompressionError } from "@/utils/compressImage";
 import {
   AlertCircle,
   Camera,
@@ -26,8 +27,6 @@ import {
   type PublicUser,
 } from "@/types/citytrace";
 
-const MAX_FILE_BYTES = 1_500_000;
-const PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
 const CORRIDOR_PRESETS: {
   label: string;
@@ -96,34 +95,42 @@ export default function ReportIssueForm({
   const [photo, setPhoto] = useState<{ name: string; dataUrl: string } | null>(null);
 
   const [submitting, setSubmitting] = useState(false);
+  const [preparingPhoto, setPreparingPhoto] = useState(false);
+  // Increments on every pick/remove, so a slow earlier photo can't replace a newer choice.
+  const photoPickRef = useRef(0);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
 
-  const onPickFile = (file: File | null) => {
+  const onPickFile = async (file: File | null) => {
+    const pick = ++photoPickRef.current;
     setErrors((previous) => ({ ...previous, photo: undefined }));
     if (!file) {
       setPhoto(null);
-      return;
-    }
-    if (!PHOTO_TYPES.includes(file.type)) {
-      setErrors((previous) => ({ ...previous, photo: "Choose a JPG, PNG or WebP photo." }));
-      return;
-    }
-    if (file.size > MAX_FILE_BYTES) {
-      setErrors((previous) => ({
-        ...previous,
-        photo: "That image is larger than 1.5 MB. Choose a smaller file.",
-      }));
+      setPreparingPhoto(false);
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === "string") {
-        setPhoto({ name: file.name, dataUrl: reader.result });
-      }
-    };
-    reader.readAsDataURL(file);
+    // Any phone photo works: it is resized to 1600 px and re-encoded as JPEG
+    // (which also strips GPS location and other metadata) before upload.
+    setPreparingPhoto(true);
+    try {
+      const dataUrl = await compressImageFile(file);
+      if (pick !== photoPickRef.current) return;
+      setPhoto({ name: file.name, dataUrl });
+    } catch (caught) {
+      if (pick !== photoPickRef.current) return;
+      setPhoto(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      setErrors((previous) => ({
+        ...previous,
+        photo:
+          caught instanceof ImageCompressionError
+            ? caught.message
+            : "This photo couldn't be prepared. Try another one.",
+      }));
+    } finally {
+      if (pick === photoPickRef.current) setPreparingPhoto(false);
+    }
   };
 
   const submit = async (event: React.FormEvent) => {
@@ -412,6 +419,7 @@ export default function ReportIssueForm({
               <button
                 type="button"
                 onClick={() => {
+                  photoPickRef.current += 1;
                   setPhoto(null);
                   if (fileInputRef.current) fileInputRef.current.value = "";
                 }}
@@ -423,14 +431,22 @@ export default function ReportIssueForm({
           </div>
         ) : (
           <label className="flex cursor-pointer items-center justify-center gap-2 rounded-[14px] border border-dashed border-black/[0.14] bg-[#F5F5F7]/70 px-4 py-5 text-[13px] font-medium text-[#6E6E73] transition-colors hover:border-[#007AFF]/50 hover:text-[#007AFF]">
-            <Camera className="h-4 w-4" />
-            Attach a photograph (JPG, PNG or WebP, max 1.5 MB)
+            {preparingPhoto ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" /> Preparing photo…
+              </>
+            ) : (
+              <>
+                <Camera className="h-4 w-4" /> Attach a photograph (any phone photo — resized automatically)
+              </>
+            )}
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/jpeg,image/png,image/webp"
+              accept="image/*"
+              disabled={preparingPhoto}
               className="sr-only"
-              onChange={(event) => onPickFile(event.target.files?.[0] ?? null)}
+              onChange={(event) => void onPickFile(event.target.files?.[0] ?? null)}
             />
           </label>
         )}
@@ -460,7 +476,7 @@ export default function ReportIssueForm({
           </Link>
           <button
             type="submit"
-            disabled={submitting}
+            disabled={submitting || preparingPhoto}
             className="inline-flex items-center gap-1.5 rounded-full bg-[#007AFF] px-5 py-2 text-[13px] font-semibold text-white shadow-[0_2px_8px_-2px_rgba(0,122,255,0.45)] transition-all hover:bg-[#0066D6] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer"
           >
             {submitting ? (

@@ -235,11 +235,19 @@ function writeAuthStore(store: AuthStoreShape): void {
 }
 
 function getSessionSecret(): string {
-  return (
-    process.env.CITYTRACE_AUTH_SECRET ||
-    process.env.AUTH_SECRET ||
-    DEFAULT_STATELESS_SECRET
-  );
+  const configured = process.env.CITYTRACE_AUTH_SECRET || process.env.AUTH_SECRET;
+  if (configured) return configured;
+
+  // The built-in fallback is public (it's in this repo), so anyone could use it
+  // to forge a session — including an official's. Allow it only off Vercel
+  // (local dev, the offline laptop backup); on Vercel, fail closed.
+  if (process.env.VERCEL) {
+    throw new Error(
+      "CITYTRACE_AUTH_SECRET is not set. Add it in Vercel → Settings → Environment Variables " +
+        "(generate one with: openssl rand -base64 32) and redeploy."
+    );
+  }
+  return DEFAULT_STATELESS_SECRET;
 }
 
 function signToken(prefix: string, payload: unknown): string {
