@@ -4,6 +4,8 @@ import { notFound } from "next/navigation";
 import {
   ArrowLeft,
   ArrowUpRight,
+  Building2,
+  CalendarClock,
   Clock,
   MapPin,
   ShieldAlert,
@@ -13,22 +15,29 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Panel, PanelHeader } from "@/components/ui/Panel";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState, KeyValue } from "@/components/ui/Data";
-import { EvidenceGallery } from "@/components/evidence/EvidenceTile";
+import { CopyLinkButton } from "@/components/ui/ExportActions";
+import { RolePill, UserAvatar } from "@/components/ui/UserAvatar";
 import EvidenceCompareSlider from "@/components/evidence/EvidenceCompareSlider";
+import EvidenceGalleryClient from "@/components/evidence/EvidenceGalleryClient";
+import AccountabilityTimeline from "@/components/governance/AccountabilityTimeline";
+import FollowButton from "@/components/governance/FollowButton";
+import IssueGovernanceConsole from "@/components/governance/IssueGovernanceConsole";
 import CitizenConfirmButton from "@/components/issues/CitizenConfirmButton";
-import IssueStatusControls from "@/components/issues/IssueStatusControls";
 import {
-  evidenceById,
   getIssuesAtLocation as seedIssuesAtLocation,
   getProject,
   getSector,
 } from "@/data";
+import { getCurrentUser, isDemoModeEnabled } from "@/lib/auth-store";
+import { getDepartmentForIssue } from "@/lib/departments";
+import { getUserWatchlist } from "@/lib/governance-store";
 import {
   findIssue,
-  findRuntimeEvidence,
   issuesAtLocation as runtimeIssuesAtLocation,
+  listAllEvidence,
 } from "@/lib/issue-store";
-import type { Evidence, IssueActor } from "@/types/citytrace";
+import { deriveIssueSla } from "@/lib/sla";
+import type { Evidence } from "@/types/citytrace";
 import { CATEGORY_LABELS, ISSUE_STATUS_LABELS } from "@/types/citytrace";
 import {
   TONES,
@@ -38,13 +47,6 @@ import {
 } from "@/utils/formatters";
 
 export const dynamic = "force-dynamic";
-
-const ACTOR_LABEL: Record<IssueActor, string> = {
-  citizen: "Citizen",
-  "municipal-desk": "Municipal desk",
-  "field-team": "Field team",
-  system: "System",
-};
 
 export async function generateMetadata({
   params,
@@ -68,11 +70,21 @@ export default async function IssueDetailPage({
 
   if (!issue) notFound();
 
+  const currentUser = await getCurrentUser();
+  const demoEnabled = isDemoModeEnabled();
+  const watchlist = currentUser
+    ? getUserWatchlist(currentUser.id)
+    : { issues: [], sectors: [], projects: [] };
+  const isFollowing = watchlist.issues.includes(issue.id);
+
   const sector = getSector(issue.sectorId);
+  const dept = getDepartmentForIssue(issue);
+  const sla = deriveIssueSla(issue);
   const project = issue.projectId ? getProject(issue.projectId) : undefined;
 
+  const allEvidenceMap = new Map(listAllEvidence().map((item) => [item.id, item]));
   const evidence: Evidence[] = issue.evidenceIds
-    .map((evidenceId) => evidenceById.get(evidenceId) ?? findRuntimeEvidence(evidenceId))
+    .map((evidenceId) => allEvidenceMap.get(evidenceId))
     .filter((item): item is Evidence => item !== undefined);
 
   const allAtLocation = runtimeIssuesAtLocation(issue.locationKey);
@@ -91,17 +103,27 @@ export default async function IssueDetailPage({
           <ArrowLeft className="h-3.5 w-3.5" />
           Civic Issue Register
         </Link>
-        <Link
-          href={`/city-explorer?feature=issue:${issue.id}`}
-          className="inline-flex items-center gap-1.5 rounded-full border border-black/[0.08] bg-white px-3.5 py-1.5 text-[12.5px] font-medium text-[#007AFF] shadow-sm hover:bg-[#F9FAFB]"
-        >
-          <MapPin className="h-3.5 w-3.5" />
-          Locate on 3D map
-        </Link>
+        <div className="print-hidden flex flex-wrap items-center gap-2">
+          <FollowButton
+            entityType="issue"
+            entityId={issue.id}
+            initialFollowing={isFollowing}
+            signedIn={Boolean(currentUser)}
+            loginNext={`/civic-issues/${issue.id}`}
+          />
+          <CopyLinkButton />
+          <Link
+            href={`/city-explorer?feature=issue:${issue.id}`}
+            className="inline-flex items-center gap-1.5 rounded-full border border-black/[0.08] bg-white px-3.5 py-1.5 text-[12.5px] font-medium text-[#007AFF] shadow-sm hover:bg-[#F9FAFB]"
+          >
+            <MapPin className="h-3.5 w-3.5" />
+            Locate on 3D map
+          </Link>
+        </div>
       </div>
 
       <PageHeader
-        eyebrow={`${issue.code} · Issue file`}
+        eyebrow={`${issue.code} · ${dept.shortName}`}
         title={issue.title}
         description={`${issue.location}${sector ? ` — ${sector.name}, ${sector.ward}` : ""}`}
         actions={
@@ -112,6 +134,7 @@ export default async function IssueDetailPage({
             <Badge tone={tone} dot>
               {ISSUE_STATUS_LABELS[issue.status]}
             </Badge>
+            <Badge tone={sla.tone}>{sla.label}</Badge>
             <Badge tone="neutral">{CATEGORY_LABELS[issue.category]}</Badge>
           </div>
         }
@@ -123,68 +146,188 @@ export default async function IssueDetailPage({
             <PanelHeader
               title="Reported Problem"
               description={`Filed ${formatDate(issue.reportedAt)} · last updated ${formatDate(issue.updatedAt)}`}
+              actions={
+                issue.reportedBy ? (
+                  <div className="flex items-center gap-2 rounded-full border border-black/[0.07] bg-[#F5F5F7] py-1 pl-1 pr-2.5">
+                    <UserAvatar
+                      initials={issue.reportedBy.initials}
+                      color={issue.reportedBy.avatarColor}
+                      size="xs"
+                    />
+                    <span className="text-[12px] font-medium text-[#1D1D1F]">
+                      {issue.reportedBy.name}
+                    </span>
+                    <RolePill role={issue.reportedBy.role} />
+                  </div>
+                ) : null
+              }
             />
             <p className="mt-3 text-[14px] leading-relaxed text-[#1D1D1F]">
               {issue.description}
             </p>
             <dl className="mt-4 grid grid-cols-2 gap-x-6 border-t border-black/[0.06] pt-2 sm:grid-cols-4">
-              <KeyValue label="Citizen reports" value={String(issue.reportCount)} />
-              <KeyValue label="Status events" value={String(issue.history.length)} />
+              <KeyValue label="Confirmations" value={String(issue.reportCount)} />
+              <KeyValue
+                label="Audit events"
+                value={String(issue.accountabilityTimeline?.length ?? issue.history.length)}
+              />
               <KeyValue label="Evidence" value={String(evidence.length)} />
               <KeyValue
-                label="Resolved"
-                value={issue.resolvedAt ? formatDate(issue.resolvedAt) : "Open"}
-                tone={issue.resolvedAt ? "ok" : "warn"}
+                label="Resolution"
+                value={
+                  issue.resolvedAt
+                    ? issue.resolutionVerification === "verified"
+                      ? `Verified · ${formatDate(issue.resolvedAt)}`
+                      : `Legacy · ${formatDate(issue.resolvedAt)}`
+                    : "Open"
+                }
+                tone={
+                  issue.resolvedAt
+                    ? issue.resolutionVerification === "verified"
+                      ? "ok"
+                      : "neutral"
+                    : "warn"
+                }
               />
             </dl>
           </Panel>
 
+          {/* Official Department Response & SLA Card */}
           <Panel className="p-5">
             <PanelHeader
-              title="Permanent History"
-              description="Resolving an issue never deletes it — every status transition remains on record."
+              title="Department Response & SLA Schedule"
+              description={`Assigned to ${dept.name}`}
+              icon={<Building2 className="h-4 w-4" />}
+              actions={<Badge tone={sla.tone}>{sla.label}</Badge>}
+            />
+            {issue.officialResponse ? (
+              <div className="mt-3.5 space-y-3">
+                <div className="rounded-[14px] border border-black/[0.06] bg-[#F9FAFB] p-3.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-[12px]">
+                    <span className="inline-flex items-center gap-1.5 font-semibold text-[#1D1D1F]">
+                      <UserAvatar
+                        initials={issue.officialResponse.respondedBy.initials}
+                        color={issue.officialResponse.respondedBy.avatarColor}
+                        size="xs"
+                      />
+                      {issue.officialResponse.respondedBy.name}
+                      <RolePill role={issue.officialResponse.respondedBy.role} />
+                    </span>
+                    <span className="text-[#6E6E73] tabular-nums">
+                      {formatDate(issue.officialResponse.respondedAt)}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-[13.5px] leading-relaxed text-[#1D1D1F]">
+                    {issue.officialResponse.message}
+                  </p>
+                </div>
+
+                <dl className="grid grid-cols-1 gap-x-6 sm:grid-cols-3">
+                  <KeyValue
+                    label="Assigned team"
+                    value={issue.assignedTeam ?? "General crew"}
+                  />
+                  <KeyValue
+                    label="Work-order ref"
+                    value={issue.workOrderRef ?? "Unassigned"}
+                  />
+                  <KeyValue
+                    label="Target repair date"
+                    value={
+                      issue.estimatedRepairDate ? (
+                        <span className="inline-flex items-center gap-1">
+                          <CalendarClock className="h-3.5 w-3.5 text-[#007AFF]" />
+                          {formatDate(issue.estimatedRepairDate)}
+                        </span>
+                      ) : (
+                        "Not scheduled"
+                      )
+                    }
+                    tone={sla.state === "overdue" ? "danger" : undefined}
+                  />
+                </dl>
+              </div>
+            ) : (
+              <p className="mt-3 rounded-[14px] bg-[#F5F5F7] px-3.5 py-3 text-[13px] text-[#6E6E73]">
+                Awaiting formal official response and estimated repair deadline from{" "}
+                <span className="font-medium text-[#1D1D1F]">{dept.shortName}</span>.
+              </p>
+            )}
+          </Panel>
+
+          {/* Repair Cycles History (kept distinct per attempt) */}
+          {issue.repairAttempts && issue.repairAttempts.length > 0 ? (
+            <Panel className="p-5">
+              <PanelHeader
+                title={`Repair Attempts & Independent Inspections (${issue.repairAttempts.length})`}
+                description="Historical repair attempts are preserved separately from active work."
+                icon={<Wrench className="h-4 w-4" />}
+              />
+              <ul className="mt-3.5 space-y-2.5">
+                {issue.repairAttempts.map((attempt) => (
+                  <li
+                    key={attempt.id}
+                    className="rounded-[14px] border border-black/[0.06] bg-[#F9FAFB] p-3.5"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-[12.5px] font-semibold text-[#1D1D1F] tabular-nums">
+                        Attempt #{attempt.attemptNumber} · Completed{" "}
+                        {formatDate(attempt.completionDate)}
+                        {attempt.workOrderRef ? ` · ${attempt.workOrderRef}` : ""}
+                      </span>
+                      {attempt.verification ? (
+                        <Badge
+                          tone={
+                            attempt.verification.decision === "approved"
+                              ? "ok"
+                              : "danger"
+                          }
+                        >
+                          {attempt.verification.decision === "approved"
+                            ? "Certified Approved"
+                            : "Rejected on Inspection"}
+                        </Badge>
+                      ) : (
+                        <Badge tone="warn">Pending Independent Inspection</Badge>
+                      )}
+                    </div>
+                    <p className="mt-1.5 text-[13px] text-[#48484A]">
+                      {attempt.resolutionNotes}
+                    </p>
+                    {attempt.verification ? (
+                      <p className="mt-2 rounded-[10px] border border-black/[0.05] bg-white px-2.5 py-2 text-[12px] text-[#48484A]">
+                        <span className="font-semibold text-[#1D1D1F]">
+                          {attempt.verification.verifiedBy.name}
+                        </span>{" "}
+                        ({formatDate(attempt.verification.verifiedAt)}): “
+                        {attempt.verification.notes}”
+                      </p>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </Panel>
+          ) : null}
+
+          <Panel className="p-5">
+            <PanelHeader
+              title="Public Accountability Timeline"
+              description="Append-only record of every report, verification, department response, SLA revision, and inspection."
               icon={<Clock className="h-4 w-4" />}
             />
-            <ol className="mt-4 space-y-4 border-l border-black/[0.08] pl-4">
-              {issue.history.map((event, index) => {
-                const eventTone = issueStatusTone(event.status);
-                const isLast = index === issue.history.length - 1;
-                return (
-                  <li key={event.id} className="relative">
-                    <span
-                      className={`absolute top-1.5 -left-[21px] h-2.5 w-2.5 rounded-full ring-2 ring-white ${TONES[eventTone].dot}`}
-                    />
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-[12px] font-medium text-[#6E6E73] tabular-nums">
-                        {formatDate(event.at)}
-                      </span>
-                      <Badge tone={eventTone}>{ISSUE_STATUS_LABELS[event.status]}</Badge>
-                      <span className="text-[11.5px] font-medium text-[#6E6E73]">
-                        {ACTOR_LABEL[event.actor]}
-                      </span>
-                      {isLast ? (
-                        <span className="rounded-full bg-[#007AFF]/[0.1] px-2 py-0.5 text-[10.5px] font-semibold text-[#0055CC]">
-                          Latest
-                        </span>
-                      ) : null}
-                    </div>
-                    <p className="mt-1.5 text-[13px] leading-relaxed text-[#48484A]">
-                      {event.note}
-                    </p>
-                  </li>
-                );
-              })}
-            </ol>
+            <div className="mt-4">
+              <AccountabilityTimeline events={issue.accountabilityTimeline ?? []} />
+            </div>
           </Panel>
 
           <Panel className="p-5">
             <PanelHeader
-              title={`Evidence (${evidence.length})`}
-              description="Supporting documents, photos, and verification status."
+              title={`Evidence Gallery (${evidence.length})`}
+              description="Supporting documents, photos, uploader attribution, and Civic Verifier moderation."
             />
             <div className="mt-3 flex flex-col gap-4">
               {evidence.length >= 2 ? <EvidenceCompareSlider items={evidence} /> : null}
-              <EvidenceGallery items={evidence} />
+              <EvidenceGalleryClient items={evidence} currentUser={currentUser} />
             </div>
           </Panel>
 
@@ -232,34 +375,43 @@ export default async function IssueDetailPage({
           </Panel>
         </div>
 
+        {/* Right rail: Verification votes + Governance Workflow + Metadata */}
         <div className="flex flex-col gap-5">
+          <Panel glow className="p-5">
+            <PanelHeader
+              title="Issue Governance & Workflow"
+              description="Role-restricted transitions with mandatory accountability records."
+            />
+            <div className="mt-3.5">
+              <IssueGovernanceConsole
+                issue={issue}
+                currentUser={currentUser}
+                demoEnabled={demoEnabled}
+              />
+            </div>
+          </Panel>
+
           <Panel className="p-5">
             <PanelHeader
               title="Citizen Verification"
-              description="Confirm if this problem still exists or has returned after repair."
+              description="Confirm if this problem still exists on site."
             />
             <div className="mt-3.5">
               <CitizenConfirmButton
                 issueId={issue.id}
                 reportCount={issue.reportCount}
                 status={issue.status}
+                votes={issue.votes ?? []}
+                currentUser={currentUser}
+                demoEnabled={demoEnabled}
               />
             </div>
           </Panel>
 
-          <Panel glow className="p-5">
-            <PanelHeader
-              title="Issue Management"
-              description="Updates append to the permanent history."
-            />
-            <div className="mt-3.5">
-              <IssueStatusControls issueId={issue.id} currentStatus={issue.status} />
-            </div>
-          </Panel>
-
           <Panel className="p-5">
-            <PanelHeader title="Location Metadata" />
+            <PanelHeader title="Location & Routing Metadata" />
             <dl className="mt-2">
+              <KeyValue label="Department" value={`${dept.code} · ${dept.shortName}`} />
               <KeyValue
                 label="Sector"
                 value={sector ? `${sector.code} · ${sector.name}` : issue.sectorId}
@@ -298,8 +450,8 @@ export default async function IssueDetailPage({
           ) : (
             <Panel className="p-5">
               <EmptyState
-                title="No linked project"
-                description="No sanctioned public work has been attached to this location yet."
+                title="Routine maintenance"
+                description="No sanctioned capital work has been attached to this location."
               />
             </Panel>
           )}

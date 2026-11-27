@@ -1,5 +1,7 @@
 import type {
+  AccountabilityPinTone,
   IssueStatus,
+  MapFeature,
   MapFeatureState,
   ProjectStatus,
   Severity,
@@ -67,7 +69,7 @@ export function daysBetween(a: string, b: string): number {
 /* Tones — Apple-inspired semantic light palette                       */
 /* ------------------------------------------------------------------ */
 
-export type Tone = "danger" | "warn" | "ok" | "info" | "neutral";
+export type Tone = "danger" | "warn" | "ok" | "info" | "purple" | "neutral";
 
 export interface ToneStyle {
   /** Raw hex for the 3D scene and inline chart styles. */
@@ -117,6 +119,15 @@ export const TONES: Record<Tone, ToneStyle> = {
     bar: "bg-[#007AFF]",
     ring: "border-[#007AFF]/35 bg-white/95 text-[#1D1D1F] shadow-[0_6px_18px_-4px_rgba(0,122,255,0.25)]",
   },
+  purple: {
+    hex: "#8944AB",
+    label: "text-[#7C3AED]",
+    text: "text-[#7C3AED]",
+    badge: "border-[#AF52DE]/25 bg-[#AF52DE]/[0.10] text-[#7C3AED]",
+    dot: "bg-[#AF52DE]",
+    bar: "bg-[#AF52DE]",
+    ring: "border-[#AF52DE]/40 bg-white/95 text-[#1D1D1F] shadow-[0_6px_18px_-4px_rgba(175,82,222,0.28)]",
+  },
   neutral: {
     hex: "#86868B",
     label: "text-[#6E6E73]",
@@ -141,13 +152,52 @@ export function issueStatusTone(status: IssueStatus): Tone {
     case "resolved":
       return "ok";
     case "reopened":
-    case "reported":
       return "danger";
-    case "under-review":
-      return "warn";
-    case "in-progress":
+    case "reported":
+      return "neutral";
+    case "under_review":
+      return "purple";
+    case "in_progress":
       return "info";
+    case "awaiting_verification":
+      return "warn";
   }
+}
+
+export const ACCOUNTABILITY_PIN_HEX: Record<AccountabilityPinTone, string> = {
+  reported: "#64748B",
+  under_review: "#AF52DE",
+  in_progress: "#007AFF",
+  awaiting_verification: "#FF9F0A",
+  alert: "#FF453A",
+  verified_resolved: "#22C55E",
+};
+
+export function mapPinHex(feature: Pick<MapFeature, "state" | "pinTone">): string {
+  if (feature.pinTone) {
+    return ACCOUNTABILITY_PIN_HEX[feature.pinTone];
+  }
+  return TONES[mapFeatureTone(feature.state)].hex;
+}
+
+export function mapPinTone(feature: Pick<MapFeature, "state" | "pinTone">): Tone {
+  if (feature.pinTone) {
+    switch (feature.pinTone) {
+      case "reported":
+        return "neutral";
+      case "under_review":
+        return "purple";
+      case "in_progress":
+        return "info";
+      case "awaiting_verification":
+        return "warn";
+      case "alert":
+        return "danger";
+      case "verified_resolved":
+        return "ok";
+    }
+  }
+  return mapFeatureTone(feature.state);
 }
 
 export function projectStatusTone(status: ProjectStatus): Tone {

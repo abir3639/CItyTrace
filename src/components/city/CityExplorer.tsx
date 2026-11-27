@@ -33,10 +33,7 @@ import {
   X,
 } from "lucide-react";
 import CityScene from "./CityScene";
-import {
-  REAL_DHAKA_MARKER_COLORS,
-  type RealDhakaTheme,
-} from "./realDhakaStyle";
+import type { RealDhakaTheme } from "./realDhakaStyle";
 
 const RealDhakaMap = dynamic(() => import("./RealDhakaMap"), {
   ssr: false,
@@ -51,37 +48,75 @@ import {
   type CivicLandmark,
 } from "./cityMapsData";
 import { EvidenceGallery } from "@/components/evidence/EvidenceTile";
+import FollowButton from "@/components/governance/FollowButton";
 import { Badge } from "@/components/ui/Badge";
 import { ProgressBar, SpendBar } from "@/components/ui/Data";
-import { PROJECTS, SECTORS, getProject, getSector } from "@/data";
 import {
-  CATEGORY_LABELS,
+  PROJECTS,
+  SECTORS,
+  deriveIssuePinMetadata,
+  getProject,
+  getSector,
+} from "@/data";
+import { getDepartmentForIssue } from "@/lib/departments";
+import { deriveIssueSla } from "@/lib/sla";
+import {
   ISSUE_STATUS_LABELS,
   PROJECT_STATUS_LABELS,
+  SLA_STATE_LABELS,
   type Evidence,
   type Issue,
   type MapFeature,
   type MapPosition,
 } from "@/types/citytrace";
+
+function describeVerification(issue: Issue): string {
+  if (issue.resolutionVerification === "verified") return "Verified Fixed";
+  if (issue.resolutionVerification === "legacy_unverified") {
+    return "Legacy (Unverified)";
+  }
+  if (issue.status === "awaiting_verification") return "Awaiting Verification";
+  if (issue.repairAttempts?.some((a) => a.verification?.decision === "rejected")) {
+    return "Verification Rejected";
+  }
+  return "Not Yet Verified";
+}
 import {
+  ACCOUNTABILITY_PIN_HEX,
   TONES,
   formatBdtCompact,
   formatDate,
   formatPercent,
   issueStatusTone,
-  mapFeatureTone,
   projectStatusTone,
   severityTone,
 } from "@/utils/formatters";
 
-type FeatureFilter = "all" | "issues" | "delayed" | "active" | "completed";
+type FeatureFilter =
+  | "all"
+  | "unaddressed"
+  | "reviewed"
+  | "in_progress"
+  | "awaiting_verification"
+  | "overdue"
+  | "reopened"
+  | "verified"
+  | "followed"
+  | "delayed"
+  | "active"
+  | "completed";
 
 const FILTER_OPTIONS: { id: FeatureFilter; label: string }[] = [
   { id: "all", label: "All" },
-  { id: "issues", label: "Issues" },
-  { id: "delayed", label: "Delayed" },
-  { id: "active", label: "Active" },
-  { id: "completed", label: "Done" },
+  { id: "unaddressed", label: "Reported" },
+  { id: "reviewed", label: "Under Review" },
+  { id: "in_progress", label: "In Progress" },
+  { id: "awaiting_verification", label: "Awaiting Check" },
+  { id: "overdue", label: "Overdue" },
+  { id: "reopened", label: "Reopened" },
+  { id: "verified", label: "Verified Fixed" },
+  { id: "followed", label: "Followed" },
+  { id: "active", label: "Projects" },
 ];
 
 const RENDER_MODES: { id: CityRenderMode; label: string }[] = [
@@ -112,14 +147,45 @@ const LOCATION_SHORTCUTS: {
   },
 ];
 
-function matchesFilter(feature: MapFeature, filter: FeatureFilter): boolean {
+function matchesFilter(
+  feature: MapFeature,
+  filter: FeatureFilter,
+  followedIssueSet: Set<string>,
+  followedSectorSet: Set<string>
+): boolean {
   switch (filter) {
     case "all":
       return true;
-    case "issues":
-      return feature.kind === "issue";
+    case "unaddressed":
+      return feature.kind === "issue" && feature.issueStatus === "reported";
+    case "reviewed":
+      return feature.kind === "issue" && feature.issueStatus === "under_review";
+    case "in_progress":
+      return feature.kind === "issue" && feature.issueStatus === "in_progress";
+    case "awaiting_verification":
+      return (
+        feature.kind === "issue" &&
+        feature.issueStatus === "awaiting_verification"
+      );
+    case "overdue":
+      return (
+        feature.kind === "issue" &&
+        (feature.slaState === "overdue" || Boolean(feature.hasWarning))
+      );
+    case "reopened":
+      return feature.kind === "issue" && feature.issueStatus === "reopened";
+    case "verified":
+      return (
+        (feature.kind === "issue" && feature.pinTone === "verified_resolved") ||
+        (feature.kind === "project" && feature.state === "completed")
+      );
+    case "followed":
+      return (
+        (feature.kind === "issue" && followedIssueSet.has(feature.refId)) ||
+        followedSectorSet.has(feature.sectorId)
+      );
     case "active":
-      return feature.kind === "project" && feature.state === "active";
+      return feature.kind === "project";
     case "completed":
       return feature.kind === "project" && feature.state === "completed";
     case "delayed":
@@ -137,6 +203,9 @@ export default function CityExplorer({
   features,
   issues,
   evidence,
+  followedIssueIds = [],
+  followedSectorIds = [],
+  signedIn = false,
 }: {
   /** Deep link from another module, e.g. `?feature=issue:ISS-003`. */
   initialFeatureId?: string | null;
@@ -150,6 +219,9 @@ export default function CityExplorer({
   issues: Issue[];
   /** Live evidence including citizen-uploaded photos. */
   evidence: Evidence[];
+  followedIssueIds?: string[];
+  followedSectorIds?: string[];
+  signedIn?: boolean;
 }) {
   const router = useRouter();
   const [view, setView] = useState<ExplorerView>(initialView);
@@ -202,23 +274,34 @@ export default function CityExplorer({
       ? timelineMonths[timelineStep]
       : null;
 
+  const followedIssueSet = useMemo(() => new Set(followedIssueIds), [followedIssueIds]);
+  const followedSectorSet = useMemo(() => new Set(followedSectorIds), [followedSectorIds]);
+
   const timelineFeatures = useMemo(() => {
     if (!activeMonth) return features;
     const cutoff = `${activeMonth}-31`;
     const list: MapFeature[] = [];
     for (const issue of issues) {
       if (issue.reportedAt > cutoff) continue;
-      if (issue.resolvedAt && issue.resolvedAt <= cutoff) continue;
+      if (issue.resolvedAt && issue.resolvedAt <= cutoff) {
+        if (issue.resolutionVerification !== "verified") continue;
+      }
+      const meta = deriveIssuePinMetadata(issue, evidenceMap);
       list.push({
         id: `issue:${issue.id}`,
         refId: issue.id,
         kind: "issue",
-        state: "unresolved",
+        state: meta.state,
         label: issue.code,
         sublabel: issue.title,
         coordinates: issue.coordinates,
         sectorId: issue.sectorId,
         severity: issue.severity,
+        pinTone: meta.pinTone,
+        issueStatus: issue.status,
+        slaState: meta.slaState,
+        hasWarning: meta.hasWarning,
+        departmentId: meta.departmentId,
       });
     }
     for (const project of PROJECTS) {
@@ -227,16 +310,16 @@ export default function CityExplorer({
       if (existing) list.push(existing);
     }
     return list;
-  }, [activeMonth, features, issues]);
+  }, [activeMonth, evidenceMap, features, issues]);
 
   const visibleFeatures = useMemo(
     () =>
       timelineFeatures.filter(
         (feature) =>
-          matchesFilter(feature, filter) &&
+          matchesFilter(feature, filter, followedIssueSet, followedSectorSet) &&
           (sectorFilter === null || feature.sectorId === sectorFilter)
       ),
-    [timelineFeatures, filter, sectorFilter]
+    [timelineFeatures, filter, followedIssueSet, followedSectorSet, sectorFilter]
   );
 
   const sectorFocus: MapPosition | null = useMemo(
@@ -760,23 +843,22 @@ export default function CityExplorer({
               ) : null}
 
               <div className="flex flex-wrap items-center gap-2">
-                <div className="ct-glass-pill pointer-events-auto flex flex-wrap items-center gap-3 rounded-full px-3 py-1.5 text-[11.5px] font-medium text-[#1D1D1F]">
+                <div className="ct-glass-pill pointer-events-auto flex flex-wrap items-center gap-2.5 rounded-full px-3 py-1.5 text-[11px] font-medium text-[#1D1D1F]">
                   {(
                     [
-                      ["unresolved", "Issue"],
-                      ["delayed", "Delayed"],
-                      ["active", "Active / Done"],
+                      ["reported", "Reported"],
+                      ["under_review", "Review"],
+                      ["in_progress", "In Progress"],
+                      ["awaiting_verification", "Awaiting Check"],
+                      ["alert", "Overdue / Reopened"],
+                      ["verified_resolved", "Verified Fixed"],
                     ] as const
-                  ).map(([state, label]) => (
-                    <span key={state} className="inline-flex items-center gap-1.5">
-                      {view === "real" ? (
-                        <span
-                          className="h-2 w-2 rounded-full"
-                          style={{ backgroundColor: REAL_DHAKA_MARKER_COLORS[state] }}
-                        />
-                      ) : (
-                        <span className={`h-2 w-2 rounded-full ${TONES[mapFeatureTone(state)].dot}`} />
-                      )}
+                  ).map(([pinTone, label]) => (
+                    <span key={pinTone} className="inline-flex items-center gap-1.5">
+                      <span
+                        className="h-2 w-2 rounded-full"
+                        style={{ backgroundColor: ACCOUNTABILITY_PIN_HEX[pinTone] }}
+                      />
                       {label}
                     </span>
                   ))}
@@ -996,6 +1078,8 @@ export default function CityExplorer({
                 issues={issues}
                 issuesMap={issuesMap}
                 evidenceMap={evidenceMap}
+                followedIssueIds={followedIssueIds}
+                signedIn={signedIn}
                 onClose={closeInspector}
               />
             ) : selected ? (
@@ -1030,6 +1114,8 @@ export default function CityExplorer({
               issues={issues}
               issuesMap={issuesMap}
               evidenceMap={evidenceMap}
+              followedIssueIds={followedIssueIds}
+              signedIn={signedIn}
               onClose={closeInspector}
             />
           ) : selected ? (
@@ -1195,12 +1281,16 @@ function IssueInspector({
   issues,
   issuesMap,
   evidenceMap,
+  followedIssueIds,
+  signedIn,
   onClose,
 }: {
   issueId: string;
   issues: Issue[];
   issuesMap: Map<string, Issue>;
   evidenceMap: Map<string, Evidence>;
+  followedIssueIds: string[];
+  signedIn: boolean;
   onClose: () => void;
 }) {
   const issue = issuesMap.get(issueId);
@@ -1208,6 +1298,8 @@ function IssueInspector({
 
   const sector = getSector(issue.sectorId);
   const project = issue.projectId ? getProject(issue.projectId) : undefined;
+  const dept = getDepartmentForIssue(issue);
+  const sla = deriveIssueSla(issue);
   const evidence = issue.evidenceIds
     .map((id) => evidenceMap.get(id))
     .filter((item): item is Evidence => item !== undefined);
@@ -1227,11 +1319,22 @@ function IssueInspector({
           <Badge tone={tone} dot>
             {ISSUE_STATUS_LABELS[issue.status]}
           </Badge>
+          <Badge tone={sla.tone}>{SLA_STATE_LABELS[sla.state]}</Badge>
           <Badge tone={severityTone(issue.severity)}>
             {issue.severity.charAt(0).toUpperCase() + issue.severity.slice(1)}
           </Badge>
         </div>
-        <CloseInspectorButton onClose={onClose} />
+        <div className="flex items-center gap-1.5">
+          <FollowButton
+            entityType="issue"
+            entityId={issue.id}
+            initialFollowing={followedIssueIds.includes(issue.id)}
+            signedIn={signedIn}
+            loginNext={`/city-explorer?feature=issue:${issue.id}`}
+            compact
+          />
+          <CloseInspectorButton onClose={onClose} />
+        </div>
       </div>
 
       <div>
@@ -1245,6 +1348,15 @@ function IssueInspector({
             {sector ? ` · ${sector.name}` : ""}
           </span>
         </p>
+        <p className="mt-1 text-[11.5px] font-medium text-[#48484A]">
+          Assigned Dept: <span className="font-semibold text-[#1D1D1F]">{dept.name}</span>
+          {issue.estimatedRepairDate ? (
+            <span className="text-[#6E6E73] tabular-nums">
+              {" "}
+              · Est. fix {formatDate(issue.estimatedRepairDate)}
+            </span>
+          ) : null}
+        </p>
       </div>
 
       <div className="grid grid-cols-2 gap-2">
@@ -1255,13 +1367,13 @@ function IssueInspector({
           </p>
         </div>
         <div className="rounded-[12px] bg-black/[0.04] px-3 py-2">
-          <p className="text-[11px] text-[#6E6E73]">Category</p>
+          <p className="text-[11px] text-[#6E6E73]">Verification</p>
           <p className="mt-0.5 text-[12.5px] font-semibold text-[#1D1D1F]">
-            {CATEGORY_LABELS[issue.category]}
+            {describeVerification(issue)}
           </p>
         </div>
         <div className="rounded-[12px] bg-black/[0.04] px-3 py-2">
-          <p className="text-[11px] text-[#6E6E73]">Citizen reports</p>
+          <p className="text-[11px] text-[#6E6E73]">Confirmations</p>
           <p className="mt-0.5 text-[12.5px] font-semibold text-[#1D1D1F] tabular-nums">
             {issue.reportCount}
           </p>
@@ -1275,6 +1387,22 @@ function IssueInspector({
       </div>
 
       <p className="text-[13px] leading-relaxed text-[#48484A]">{issue.description}</p>
+
+      {issue.officialResponse ? (
+        <div className="rounded-[14px] border border-[#007AFF]/20 bg-[#007AFF]/[0.06] p-3">
+          <p className="text-[11.5px] font-semibold text-[#0055CC]">
+            Official Response · {issue.officialResponse.respondedBy.name}
+          </p>
+          <p className="mt-1 text-[12px] leading-relaxed text-[#1D1D1F]">
+            {issue.officialResponse.message}
+          </p>
+          {issue.workOrderRef ? (
+            <p className="mt-1 text-[11px] font-medium text-[#6E6E73] tabular-nums">
+              Work order: {issue.workOrderRef}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
 
       {others.length > 0 ? (
         <div className="rounded-[14px] border border-[#FF9500]/25 bg-[#FF9500]/[0.08] p-3">

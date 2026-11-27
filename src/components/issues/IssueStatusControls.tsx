@@ -1,17 +1,26 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Loader2 } from "lucide-react";
-import { ISSUE_STATUS_LABELS, ISSUE_STATUS_ORDER, type IssueStatus } from "@/types/citytrace";
+import { Check, Loader2, LogIn } from "lucide-react";
+import {
+  ISSUE_STATUS_LABELS,
+  ISSUE_STATUS_ORDER,
+  type IssueStatus,
+  type PublicUser,
+} from "@/types/citytrace";
+import { RolePill, UserAvatar } from "@/components/ui/UserAvatar";
 import { issueStatusTone, TONES } from "@/utils/formatters";
 
 export default function IssueStatusControls({
   issueId,
   currentStatus,
+  currentUser,
 }: {
   issueId: string;
   currentStatus: IssueStatus;
+  currentUser: PublicUser | null;
 }) {
   const router = useRouter();
   const [status, setStatus] = useState<IssueStatus>(currentStatus);
@@ -55,8 +64,39 @@ export default function IssueStatusControls({
     }
   };
 
+  if (!currentUser) {
+    return (
+      <div className="flex flex-col gap-3 rounded-[14px] border border-black/[0.06] bg-[#F5F5F7] p-3.5">
+        <p className="text-[12.5px] leading-relaxed text-[#48484A]">
+          Status transitions append an individual attribution stamp to the permanent audit trail.
+          Sign in to record an official or community update.
+        </p>
+        <Link
+          href={`/login?next=/civic-issues/${issueId}`}
+          className="inline-flex items-center justify-center gap-1.5 rounded-full bg-[#007AFF] px-4 py-2 text-[12.5px] font-semibold text-white shadow-xs transition-all hover:bg-[#0066D6]"
+        >
+          <LogIn className="h-3.5 w-3.5" />
+          Sign in to update status
+        </Link>
+      </div>
+    );
+  }
+
   return (
     <form onSubmit={submit} className="flex flex-col gap-3">
+      <div className="flex items-center justify-between gap-2 rounded-[12px] bg-[#F5F5F7] px-3 py-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <UserAvatar
+            initials={currentUser.initials}
+            color={currentUser.avatarColor}
+            size="xs"
+          />
+          <span className="truncate text-[12px] font-medium text-[#1D1D1F]">
+            {currentUser.name}
+          </span>
+        </div>
+        <RolePill role={currentUser.role} />
+      </div>
       <fieldset>
         <legend className="text-[12px] font-medium text-[#6E6E73]">Move to status</legend>
         <div className="mt-2 grid grid-cols-1 gap-1.5">

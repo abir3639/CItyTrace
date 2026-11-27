@@ -5,14 +5,18 @@ import {
   CalendarClock,
   Coins,
   FileWarning,
+  Flag,
+  FolderKanban,
   RefreshCw,
+  ShieldAlert,
   TrendingUp,
   type LucideIcon,
 } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Panel, PanelHeader } from "@/components/ui/Panel";
-import { anomalyKindLabel, type AnomalyFinding, type AnomalyKind } from "@/lib/anomalies";
+import { anomalyKindLabel, type AnomalyFinding, type AnomalyKind, type AnomalySeverity } from "@/lib/anomalies";
 import { recordHref } from "@/lib/links";
+import { formatDate } from "@/utils/formatters";
 
 const KIND_ICON: Record<AnomalyKind, LucideIcon> = {
   spend: Coins,
@@ -21,17 +25,36 @@ const KIND_ICON: Record<AnomalyKind, LucideIcon> = {
   milestone: AlertTriangle,
   evidence: FileWarning,
   recurrence: RefreshCw,
+  overdue_repair: CalendarClock,
+  missing_response: AlertTriangle,
+  failed_verification: ShieldAlert,
+  repeated_reopen: RefreshCw,
+  insufficient_evidence: FileWarning,
+  frequent_extensions: CalendarClock,
+  delayed_verification: CalendarClock,
+  flagged_evidence: Flag,
+  project_issue_cluster: FolderKanban,
 };
 
-const SEVERITY_TONE = {
+const SEVERITY_TONE: Record<AnomalySeverity, "danger" | "warn" | "info" | "neutral"> = {
+  critical: "danger",
   high: "danger",
   medium: "warn",
-  low: "neutral",
-} as const;
+  low: "info",
+  informational: "neutral",
+};
+
+const SEVERITY_LABEL: Record<AnomalySeverity, string> = {
+  critical: "Critical",
+  high: "High",
+  medium: "Medium",
+  low: "Low",
+  informational: "Info",
+};
 
 export default function FindingsFeed({
   findings,
-  limit = 8,
+  limit = 10,
 }: {
   findings: AnomalyFinding[];
   limit?: number;
@@ -41,8 +64,8 @@ export default function FindingsFeed({
   return (
     <Panel className="flex flex-col gap-4 p-5">
       <PanelHeader
-        title="City-wide Findings"
-        description="Automated observations requiring verification — not allegations."
+        title="City-wide Accountability Findings"
+        description="Deterministic rule-based observations requiring verification — never allegations."
         icon={<AlertTriangle className="h-4 w-4" />}
         actions={
           <span className="text-[12px] font-medium text-[#6E6E73] tabular-nums">
@@ -74,7 +97,7 @@ export default function FindingsFeed({
                   </span>
                   <span className="flex items-center gap-2">
                     <Badge tone={tone} dot>
-                      {finding.severity.charAt(0).toUpperCase() + finding.severity.slice(1)}
+                      {SEVERITY_LABEL[finding.severity]}
                     </Badge>
                     <span className="text-[11.5px] text-[#6E6E73] tabular-nums">
                       {finding.confidence}% conf.
@@ -87,34 +110,44 @@ export default function FindingsFeed({
                 </p>
                 <p className="text-[12.5px] leading-relaxed text-[#48484A]">{finding.detail}</p>
 
-                <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-black/[0.05] pt-2.5 text-[12px]">
-                  {projectHref && finding.projectId ? (
-                    <Link
-                      href={projectHref}
-                      className="inline-flex items-center gap-1 font-semibold text-[#007AFF] hover:underline tabular-nums"
-                    >
-                      {finding.projectId}
-                      <ArrowUpRight className="h-3 w-3" />
-                    </Link>
-                  ) : null}
-                  {finding.issueIds.slice(0, 3).map((issueId) => {
-                    const href = recordHref(issueId);
-                    if (!href) return null;
-                    return (
+                <div className="rounded-[10px] bg-white px-2.5 py-1.5 text-[11px] text-[#6E6E73]">
+                  <p className="font-medium text-[#48484A]">{finding.triggerRule}</p>
+                  <p className="mt-0.5">Next: {finding.suggestedAction}</p>
+                </div>
+
+                <div className="mt-auto flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-black/[0.05] pt-2.5 text-[12px]">
+                  <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    {projectHref && finding.projectId ? (
                       <Link
-                        key={issueId}
-                        href={href}
-                        className="font-medium text-[#6E6E73] hover:text-[#1D1D1F] tabular-nums"
+                        href={projectHref}
+                        className="inline-flex items-center gap-1 font-semibold text-[#007AFF] hover:underline tabular-nums"
                       >
-                        {issueId}
+                        {finding.projectId}
+                        <ArrowUpRight className="h-3 w-3" />
                       </Link>
-                    );
-                  })}
-                  {finding.issueIds.length > 3 ? (
-                    <span className="text-[11.5px] text-[#86868B] tabular-nums">
-                      +{finding.issueIds.length - 3} more
-                    </span>
-                  ) : null}
+                    ) : null}
+                    {finding.issueIds.slice(0, 3).map((issueId) => {
+                      const href = recordHref(issueId);
+                      if (!href) return null;
+                      return (
+                        <Link
+                          key={issueId}
+                          href={href}
+                          className="font-medium text-[#6E6E73] hover:text-[#1D1D1F] tabular-nums"
+                        >
+                          {issueId}
+                        </Link>
+                      );
+                    })}
+                    {finding.issueIds.length > 3 ? (
+                      <span className="text-[11.5px] text-[#86868B] tabular-nums">
+                        +{finding.issueIds.length - 3} more
+                      </span>
+                    ) : null}
+                  </span>
+                  <span className="text-[11px] text-[#86868B] tabular-nums">
+                    {formatDate(finding.detectedAt)}
+                  </span>
                 </div>
               </li>
             );

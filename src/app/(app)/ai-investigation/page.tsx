@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { AlertTriangle, RefreshCw, ShieldAlert } from "lucide-react";
+import { AlertTriangle, FolderKanban, RefreshCw, ShieldAlert } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatCard } from "@/components/ui/Data";
 import { Badge } from "@/components/ui/Badge";
@@ -30,7 +30,7 @@ export default async function AiInvestigationPage({
 
   const issues = listIssues();
   const allEvidence = listAllEvidence();
-  const findings = findAnomalies(issues);
+  const findings = findAnomalies(issues, allEvidence);
   const summary = summariseAnomalies(findings);
   const initialReport = initialProjectId
     ? analyzeProject(initialProjectId, issues, allEvidence)
@@ -56,9 +56,9 @@ export default async function AiInvestigationPage({
           icon={<AlertTriangle className="h-4 w-4" />}
         />
         <StatCard
-          label="High severity"
-          value={String(summary.high)}
-          hint="Material gaps requiring verification first"
+          label="Critical & high alerts"
+          value={String(summary.critical + summary.high)}
+          hint={`${summary.critical} critical · ${summary.high} high severity`}
           tone="danger"
           icon={<ShieldAlert className="h-4 w-4" />}
         />
@@ -67,7 +67,7 @@ export default async function AiInvestigationPage({
           value={String(summary.projects)}
           hint="Works carrying at least one finding"
           tone="warn"
-          icon={<RefreshCw className="h-4 w-4" />}
+          icon={<FolderKanban className="h-4 w-4" />}
         />
         <StatCard
           label="Recurring locations"

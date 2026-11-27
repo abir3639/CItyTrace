@@ -1,10 +1,20 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { ArrowUpRight } from "lucide-react";
 import { TONES, type Tone } from "@/utils/formatters";
 
 /* ------------------------------------------------------------------ */
 /* Stat cards                                                          */
 /* ------------------------------------------------------------------ */
+
+const ICON_WELL: Record<Tone, string> = {
+  danger: "bg-[#FF3B30]/[0.09] ring-1 ring-[#FF3B30]/15",
+  warn: "bg-[#FF9500]/[0.10] ring-1 ring-[#FF9500]/15",
+  ok: "bg-[#34C759]/[0.10] ring-1 ring-[#34C759]/15",
+  info: "bg-[#007AFF]/[0.09] ring-1 ring-[#007AFF]/15",
+  purple: "bg-[#AF52DE]/[0.10] ring-1 ring-[#AF52DE]/15",
+  neutral: "bg-[#F0F2F5] ring-1 ring-black/[0.05]",
+};
 
 interface StatCardProps {
   label: string;
@@ -30,7 +40,9 @@ export function StatCard({
       <div className="flex items-center justify-between gap-2">
         <p className="text-[13px] font-medium text-[#6E6E73]">{label}</p>
         {icon ? (
-          <span className={`flex h-7 w-7 items-center justify-center rounded-full bg-[#F5F5F7] ${style.label}`}>
+          <span
+            className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${ICON_WELL[tone]} ${style.label}`}
+          >
             {icon}
           </span>
         ) : null}
@@ -39,15 +51,21 @@ export function StatCard({
         {value}
       </p>
       {hint ? (
-        <p className="mt-2 text-[12px] leading-snug text-[#6E6E73]">{hint}</p>
+        <div className="mt-2 flex items-end justify-between gap-2">
+          <p className="text-[12px] leading-snug text-[#6E6E73]">{hint}</p>
+          {href ? (
+            <ArrowUpRight
+              aria-hidden="true"
+              className="h-3.5 w-3.5 shrink-0 translate-y-0.5 -translate-x-0.5 text-[#007AFF] opacity-0 transition-all duration-200 group-hover:translate-x-0 group-hover:translate-y-0 group-hover:opacity-100"
+            />
+          ) : null}
+        </div>
       ) : null}
     </>
   );
 
-  const shared = `ct-surface flex flex-col rounded-[20px] p-5 transition-all duration-200 ${
-    href
-      ? "hover:-translate-y-0.5 hover:shadow-[0_12px_28px_-12px_rgba(15,23,42,0.16)] active:scale-[0.99]"
-      : ""
+  const shared = `ct-surface flex flex-col rounded-[20px] p-5 ${
+    href ? "group ct-card-interactive" : ""
   }`;
 
   if (href) {

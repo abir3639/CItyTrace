@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import CityExplorer from "@/components/city/CityExplorer";
 import { CITY_MAPS, type CityMapId, type CityRenderMode } from "@/components/city/cityMapsData";
 import { toMapFeatures } from "@/data";
+import { getCurrentUser } from "@/lib/auth-store";
+import { getUserWatchlist } from "@/lib/governance-store";
 import { listAllEvidence, listIssues } from "@/lib/issue-store";
 
 export const dynamic = "force-dynamic";
@@ -36,7 +38,11 @@ export default async function CityExplorerPage({
 
   const issues = listIssues();
   const evidence = listAllEvidence();
-  const features = toMapFeatures(issues);
+  const features = toMapFeatures(issues, evidence);
+  const currentUser = await getCurrentUser();
+  const watchlist = currentUser
+    ? getUserWatchlist(currentUser.id)
+    : { issues: [], sectors: [], projects: [] };
 
   return (
     <CityExplorer
@@ -47,6 +53,9 @@ export default async function CityExplorerPage({
       features={features}
       issues={issues}
       evidence={evidence}
+      followedIssueIds={watchlist.issues}
+      followedSectorIds={watchlist.sectors}
+      signedIn={Boolean(currentUser)}
     />
   );
 }

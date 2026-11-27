@@ -3,7 +3,10 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Panel } from "@/components/ui/Panel";
 import ReportIssueForm from "@/components/issues/ReportIssueForm";
 import { SECTORS } from "@/data";
+import { getCurrentUser } from "@/lib/auth-store";
 import type { MapPosition } from "@/types/citytrace";
+
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Report an issue · CityTrace",
@@ -14,6 +17,7 @@ export default async function ReportIssuePage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const currentUser = await getCurrentUser();
   const params = await searchParams;
   const rawSector = typeof params.sector === "string" ? params.sector : undefined;
   const initialSectorId = SECTORS.some((s) => s.id === rawSector) ? rawSector : undefined;
@@ -42,6 +46,7 @@ export default async function ReportIssuePage({
           initialSectorId={initialSectorId}
           initialLocation={initialLocation}
           initialCoordinates={initialCoordinates}
+          currentUser={currentUser}
         />
       </Panel>
 

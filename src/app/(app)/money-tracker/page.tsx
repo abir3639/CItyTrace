@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Panel, PanelHeader } from "@/components/ui/Panel";
 import { Badge } from "@/components/ui/Badge";
 import { KeyValue, ProgressBar, SpendBar } from "@/components/ui/Data";
+import DepartmentAnalytics from "@/components/governance/DepartmentAnalytics";
 import {
   LedgerCsvExportButton,
   PrintDossierButton,
@@ -17,7 +18,7 @@ import {
   SpendComparisonChart,
 } from "@/components/money/MoneyCharts";
 import { PROJECTS, getSector } from "@/data";
-import { listIssues } from "@/lib/issue-store";
+import { listAllEvidence, listIssues } from "@/lib/issue-store";
 import {
   CATEGORY_LABELS,
   PROJECT_STATUS_LABELS,
@@ -28,6 +29,8 @@ import {
   getBlockedProjects,
   getBudgetTotals,
   getCategoryStats,
+  getDepartmentPerformance,
+  getProjectCivicOutcome,
   getProjectOverdueDays,
 } from "@/lib/stats";
 import {
@@ -46,6 +49,7 @@ export const metadata: Metadata = {
 
 export default function MoneyTrackerPage() {
   const issues = listIssues();
+  const evidence = listAllEvidence();
 
   const totals = getBudgetTotals(PROJECTS);
   const missingVerification = PROJECTS.filter(
@@ -84,6 +88,7 @@ export default function MoneyTrackerPage() {
   }));
 
   const scorecards = getAuthorityScorecards(issues);
+  const deptPerformance = getDepartmentPerformance(issues);
 
   const ledgerExportRows: LedgerExportRow[] = PROJECTS.map((project) => ({
     code: project.code,
@@ -314,15 +319,14 @@ export default function MoneyTrackerPage() {
                 <th scope="col" className="px-3 py-3 text-right">Reported</th>
                 <th scope="col" className="px-3 py-3 text-right">Verified</th>
                 <th scope="col" className="px-3 py-3">Utilization</th>
-                <th scope="col" className="px-5 py-3">Physical</th>
+                <th scope="col" className="px-3 py-3">Physical</th>
+                <th scope="col" className="px-5 py-3">Civic Outcomes</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-black/[0.05] bg-white">
               {PROJECTS.map((project) => {
                 const sector = getSector(project.sectorId);
-                const relatedIssues = issues.filter(
-                  (issue) => issue.projectId === project.id
-                );
+                const outcome = getProjectCivicOutcome(project, issues, evidence);
                 const overdue = getProjectOverdueDays(project);
                 const reportedPct =
                   (project.reportedExpenditureBdt / project.allocatedBudgetBdt) * 100;
@@ -340,7 +344,7 @@ export default function MoneyTrackerPage() {
                         {project.name}
                       </p>
                       <p className="mt-0.5 text-[11.5px] text-[#6E6E73] tabular-nums">
-                        {sector?.code ?? project.sectorId} · {relatedIssues.length} linked issues
+                        {sector?.code ?? project.sectorId} · {outcome.linkedIssues.length} linked issues
                         {overdue > 0 ? ` · ${overdue}d overdue` : ""}
                       </p>
                     </th>
@@ -375,7 +379,7 @@ export default function MoneyTrackerPage() {
                         </p>
                       </div>
                     </td>
-                    <td className="px-5 py-3.5 align-top">
+                    <td className="px-3 py-3.5 align-top">
                       <div className="w-24">
                         <ProgressBar
                           value={project.verifiedProgressPercent}
@@ -388,6 +392,33 @@ export default function MoneyTrackerPage() {
                         </p>
                       </div>
                     </td>
+                    <td className="px-5 py-3.5 align-top text-[11.5px] tabular-nums">
+                      <div className="flex flex-wrap gap-1">
+                        {outcome.verifiedRepairsCount > 0 ? (
+                          <span className="rounded-full bg-[#34C759]/[0.12] px-2 py-0.5 font-semibold text-[#1A7F37]">
+                            {outcome.verifiedRepairsCount} verified
+                          </span>
+                        ) : null}
+                        {outcome.activeRepairsCount > 0 ? (
+                          <span className="rounded-full bg-[#007AFF]/[0.1] px-2 py-0.5 font-semibold text-[#0055CC]">
+                            {outcome.activeRepairsCount} active
+                          </span>
+                        ) : null}
+                        {outcome.overdueRepairsCount > 0 ? (
+                          <span className="rounded-full bg-[#FF3B30]/[0.1] px-2 py-0.5 font-semibold text-[#C9241B]">
+                            {outcome.overdueRepairsCount} overdue
+                          </span>
+                        ) : null}
+                        {outcome.reopenedOrFailedCount > 0 ? (
+                          <span className="rounded-full bg-[#FF9500]/[0.12] px-2 py-0.5 font-semibold text-[#B25000]">
+                            {outcome.reopenedOrFailedCount} reopened
+                          </span>
+                        ) : null}
+                        {outcome.linkedIssues.length === 0 ? (
+                          <span className="text-[#86868B]">No linked issues</span>
+                        ) : null}
+                      </div>
+                    </td>
                   </tr>
                 );
               })}
@@ -395,6 +426,8 @@ export default function MoneyTrackerPage() {
           </table>
         </div>
       </Panel>
+
+      <DepartmentAnalytics rows={deptPerformance} />
 
       <Panel className="p-5">
         <PanelHeader

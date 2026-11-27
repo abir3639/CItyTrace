@@ -9,7 +9,8 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "check:links": "node scripts/check-links.mjs",
-    "reset:demo": "node scripts/reset-demo-store.mjs"
+    "reset:demo": "node scripts/reset-demo-store.mjs",
+    "test:governance": "node scripts/test-governance.mjs"
   },
   "dependencies": {
     "@google/genai": "^3.6.1",

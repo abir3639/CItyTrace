@@ -15,13 +15,26 @@ export const AXIS_STYLE = { fill: "#6E6E73", fontSize: 11 } as const;
 export const GRID_STROKE = "#E8EAEE";
 export const LEGEND_STYLE = { fontSize: 11, color: "#6E6E73" } as const;
 export const TOOLTIP_STYLE = {
-  background: "rgba(255, 255, 255, 0.94)",
+  background: "rgba(255, 255, 255, 0.96)",
   backdropFilter: "blur(12px)",
-  border: "1px solid rgba(0, 0, 0, 0.08)",
+  border: "1px solid rgba(15, 23, 42, 0.09)",
   borderRadius: 14,
-  boxShadow: "0 8px 24px -6px rgba(15, 23, 42, 0.12)",
+  boxShadow: "0 10px 28px -6px rgba(15, 23, 42, 0.14)",
+  padding: "10px 12px",
+  lineHeight: 1.45,
   fontSize: 12,
   color: "#1D1D1F",
+} as const;
+
+export const BAR_TOOLTIP_CURSOR = {
+  fill: "rgba(0, 122, 255, 0.055)",
+  radius: 8,
+} as const;
+
+export const AREA_TOOLTIP_CURSOR = {
+  stroke: "rgba(0, 122, 255, 0.28)",
+  strokeWidth: 1.5,
+  strokeDasharray: "4 4",
 } as const;
 
 export const PALETTE = {

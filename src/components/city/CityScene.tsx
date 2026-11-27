@@ -7,7 +7,7 @@ import * as THREE from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { Navigation } from "lucide-react";
 import type { MapFeature, MapPosition } from "@/types/citytrace";
-import { TONES, mapFeatureTone } from "@/utils/formatters";
+import { TONES, mapPinHex, mapPinTone } from "@/utils/formatters";
 import { getSector } from "@/data";
 import { nearestSectorForPosition } from "@/lib/geo";
 import {
@@ -311,7 +311,7 @@ function FeatureMarker({
 }) {
   const [hovered, setHovered] = useState(false);
   const headRef = useRef<THREE.Mesh | null>(null);
-  const hex = TONES[mapFeatureTone(feature.state)].hex;
+  const hex = mapPinHex(feature);
   const [x, , z] = [feature.coordinates[0], 0, feature.coordinates[1]];
 
   useEffect(() => {
@@ -639,7 +639,7 @@ function RadarMiniMap({
 
         {/* Beacons */}
         {features.map((f) => {
-          const hex = TONES[mapFeatureTone(f.state)].hex;
+          const hex = mapPinHex(f);
           const active = f.id === selectedId;
           return (
             <circle
@@ -858,10 +858,10 @@ export default function CityScene({
             onClick={() => onSelect(activeFeature.id)}
             style={{ opacity: 0 }}
             className={`absolute top-0 left-0 flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap backdrop-blur-md tabular-nums ${
-              TONES[mapFeatureTone(activeFeature.state)].ring
+              TONES[mapPinTone(activeFeature)].ring
             }`}
           >
-            <span className={`h-1.5 w-1.5 rounded-full ${TONES[mapFeatureTone(activeFeature.state)].dot}`} />
+            <span className={`h-1.5 w-1.5 rounded-full ${TONES[mapPinTone(activeFeature)].dot}`} />
             <span>{activeFeature.label}</span>
           </button>
         ) : null}

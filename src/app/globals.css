@@ -86,18 +86,40 @@ h2 {
 
 .ct-surface {
   background: #FFFFFF;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid rgba(15, 23, 42, 0.065);
   box-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 1px 2px rgba(15, 23, 42, 0.04),
     0 8px 24px -12px rgba(15, 23, 42, 0.08);
 }
 
 .ct-surface-elevated {
   background: #FFFFFF;
-  border: 1px solid rgba(0, 0, 0, 0.07);
+  border: 1px solid rgba(15, 23, 42, 0.08);
   box-shadow:
-    0 2px 6px rgba(0, 0, 0, 0.04),
-    0 16px 36px -14px rgba(15, 23, 42, 0.12);
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    0 2px 6px rgba(15, 23, 42, 0.05),
+    0 18px 38px -14px rgba(15, 23, 42, 0.13);
+}
+
+.ct-card-interactive {
+  transition:
+    transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    box-shadow 200ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    border-color 200ms ease;
+}
+
+.ct-card-interactive:hover {
+  transform: translateY(-2px);
+  border-color: rgba(0, 122, 255, 0.18);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    0 4px 10px rgba(15, 23, 42, 0.05),
+    0 14px 30px -12px rgba(15, 23, 42, 0.14);
+}
+
+.ct-card-interactive:active {
+  transform: scale(0.99);
 }
 
 .ct-surface-inset {
@@ -106,14 +128,14 @@ h2 {
 }
 
 .ct-glass {
-  background: rgba(255, 255, 255, 0.8);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
-  backdrop-filter: blur(24px) saturate(180%);
-  border: 1px solid rgba(0, 0, 0, 0.07);
+  background: rgba(255, 255, 255, 0.94);
+  -webkit-backdrop-filter: blur(28px) saturate(190%);
+  backdrop-filter: blur(28px) saturate(190%);
+  border: 1px solid rgba(15, 23, 42, 0.09);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.92),
-    0 4px 12px rgba(0, 0, 0, 0.05),
-    0 20px 44px -16px rgba(15, 23, 42, 0.16);
+    inset 0 1px 0 rgba(255, 255, 255, 0.96),
+    0 6px 16px rgba(15, 23, 42, 0.08),
+    0 24px 48px -14px rgba(15, 23, 42, 0.22);
 }
 
 .ct-glass-pill {
@@ -359,5 +381,13 @@ h2 {
     backdrop-filter: none !important;
     background: #FFFFFF !important;
     border-color: #E5E7EB !important;
+  }
+
+  .ct-surface,
+  .ct-surface-elevated,
+  .ct-surface-inset,
+  tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
 }

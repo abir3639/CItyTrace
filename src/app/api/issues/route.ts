@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { SECTORS } from "@/data";
+import { getCurrentUser } from "@/lib/auth-store";
 import { createIssue } from "@/lib/issue-store";
+import { canUserPerform } from "@/lib/permissions";
 import { ISSUE_CATEGORIES, type IssueCategory, type MapPosition } from "@/types/citytrace";
 
 const MAX_PHOTO_CHARS = 2_500_000; // ~1.8 MB of image data as base64
@@ -21,6 +23,21 @@ function asTrimmedString(value: unknown, max: number): string {
 }
 
 export async function POST(request: Request) {
+  const user = await getCurrentUser();
+  if (!user) {
+    return NextResponse.json(
+      { error: "Please sign in to file a civic report.", code: "AUTH_REQUIRED" },
+      { status: 401 }
+    );
+  }
+  const perm = canUserPerform(user, "report_issue");
+  if (!perm.allowed) {
+    return NextResponse.json(
+      { error: perm.reason ?? "Forbidden.", code: "FORBIDDEN" },
+      { status: 403 }
+    );
+  }
+
   let body: Body;
   try {
     body = (await request.json()) as Body;
@@ -75,16 +92,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Validation failed.", fields: errors }, { status: 422 });
   }
 
-  const issue = createIssue({
-    title,
-    category,
-    description,
-    location,
-    sectorId,
-    ...(locationKey ? { locationKey } : {}),
-    ...(coordinates ? { coordinates } : {}),
-    photoDataUrl,
-  });
+  const issue = createIssue(
+    {
+      title,
+      category,
+      description,
+      location,
+      sectorId,
+      ...(locationKey ? { locationKey } : {}),
+      ...(coordinates ? { coordinates } : {}),
+      photoDataUrl,
+    },
+    user
+  );
 
   return NextResponse.json({ issue }, { status: 201 });
 }

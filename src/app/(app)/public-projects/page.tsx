@@ -2,14 +2,15 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import {
   ArrowRight,
-  Building2,
   CalendarClock,
   FolderKanban,
   LayoutGrid,
   MapPin,
   Search,
+  ShieldCheck,
   Sparkles,
   Table2,
+  Wallet,
 } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Panel, PanelHeader } from "@/components/ui/Panel";
@@ -122,7 +123,7 @@ export default async function PublicProjectsPage({
           label="Total allocation"
           value={formatBdtCompact(totals.allocatedBdt)}
           hint="Combined sanctioned ceiling"
-          icon={<Building2 className="h-4 w-4" />}
+          icon={<Wallet className="h-4 w-4" />}
           tone="neutral"
         />
         <StatCard
@@ -136,7 +137,7 @@ export default async function PublicProjectsPage({
           label="Verified expenditure"
           value={formatBdtCompact(totals.verifiedBdt)}
           hint={`${formatBdtCompact(totals.unverifiedBdt)} unverified`}
-          icon={<Building2 className="h-4 w-4" />}
+          icon={<ShieldCheck className="h-4 w-4" />}
           tone="ok"
         />
       </div>

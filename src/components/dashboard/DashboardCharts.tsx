@@ -16,7 +16,9 @@ import {
   YAxis,
 } from "recharts";
 import {
+  AREA_TOOLTIP_CURSOR,
   AXIS_STYLE,
+  BAR_TOOLTIP_CURSOR,
   ChartBoundary,
   ChartFrame,
   DataFallback,
@@ -56,7 +58,7 @@ export function IssueTrendChart({ data }: { data: TrendPoint[] }) {
           <CartesianGrid stroke={GRID_STROKE} vertical={false} />
           <XAxis dataKey="label" tick={AXIS_STYLE} stroke={GRID_STROKE} minTickGap={22} />
           <YAxis allowDecimals={false} tick={AXIS_STYLE} stroke={GRID_STROKE} />
-          <Tooltip contentStyle={TOOLTIP_STYLE} />
+          <Tooltip contentStyle={TOOLTIP_STYLE} cursor={AREA_TOOLTIP_CURSOR} />
           <Legend wrapperStyle={LEGEND_STYLE} />
           <Area
             type="monotone"
@@ -65,6 +67,7 @@ export function IssueTrendChart({ data }: { data: TrendPoint[] }) {
             stroke={PALETTE.blue}
             strokeWidth={2.2}
             fill="url(#ct-trend-reported)"
+            activeDot={{ r: 5, stroke: "#FFFFFF", strokeWidth: 2 }}
           />
           <Area
             type="monotone"
@@ -73,6 +76,7 @@ export function IssueTrendChart({ data }: { data: TrendPoint[] }) {
             stroke={PALETTE.green}
             strokeWidth={2.2}
             fill="url(#ct-trend-resolved)"
+            activeDot={{ r: 5, stroke: "#FFFFFF", strokeWidth: 2 }}
           />
         </AreaChart>
       </ChartFrame>
@@ -108,7 +112,7 @@ export function CategoryPerformanceChart({ data }: { data: CategoryPerformanceRo
           <CartesianGrid stroke={GRID_STROKE} vertical={false} />
           <XAxis dataKey="category" tick={AXIS_STYLE} stroke={GRID_STROKE} />
           <YAxis allowDecimals={false} tick={AXIS_STYLE} stroke={GRID_STROKE} />
-          <Tooltip contentStyle={TOOLTIP_STYLE} />
+          <Tooltip contentStyle={TOOLTIP_STYLE} cursor={BAR_TOOLTIP_CURSOR} />
           <Legend wrapperStyle={LEGEND_STYLE} />
           <Bar
             dataKey="open"
@@ -163,7 +167,7 @@ export function SectorComparisonChart({ data }: { data: SectorComparisonRow[] })
           <CartesianGrid stroke={GRID_STROKE} horizontal={false} />
           <XAxis type="number" allowDecimals={false} tick={AXIS_STYLE} stroke={GRID_STROKE} />
           <YAxis type="category" dataKey="sector" tick={AXIS_STYLE} stroke={GRID_STROKE} width={48} />
-          <Tooltip contentStyle={TOOLTIP_STYLE} />
+          <Tooltip contentStyle={TOOLTIP_STYLE} cursor={BAR_TOOLTIP_CURSOR} />
           <Legend wrapperStyle={LEGEND_STYLE} />
           <Bar
             dataKey="open"

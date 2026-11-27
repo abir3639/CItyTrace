@@ -1,20 +1,31 @@
 #!/usr/bin/env node
 /**
- * Clears citizen reports and status changes recorded during a demo session.
+ * Clears citizen reports, status changes, and user auth sessions/registrations
+ * recorded during a demo session.
  *
- * The runtime store lives in the OS temp directory so it never pollutes the
- * project tree; this script removes it so the next run starts from the seeded
- * 22-issue dataset.
+ * Runtime stores live in the OS temp directory so they never pollute the project
+ * tree; this script removes them so the next run starts cleanly from the seeded
+ * 22-issue dataset and 4 seeded demo accounts.
  */
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-const file = path.join(os.tmpdir(), "citytrace-runtime-issues.json");
+const files = [
+  path.join(os.tmpdir(), "citytrace-runtime-issues.json"),
+  path.join(os.tmpdir(), "citytrace-runtime-auth.json"),
+  path.join(os.tmpdir(), "citytrace-runtime-governance.json"),
+];
 
-if (fs.existsSync(file)) {
-  fs.rmSync(file, { force: true });
-  console.log(`Removed demo store: ${file}`);
-} else {
+let removedAny = false;
+for (const file of files) {
+  if (fs.existsSync(file)) {
+    fs.rmSync(file, { force: true });
+    console.log(`Removed demo store: ${file}`);
+    removedAny = true;
+  }
+}
+
+if (!removedAny) {
   console.log("No demo store found — nothing to reset.");
 }

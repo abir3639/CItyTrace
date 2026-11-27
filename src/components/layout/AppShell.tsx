@@ -6,6 +6,7 @@ import Sidebar from "./Sidebar";
 import TopBar from "./TopBar";
 import type { SearchIssue } from "@/lib/search";
 import type { ActivityEvent } from "@/lib/stats";
+import type { PublicUser, UserNotification } from "@/types/citytrace";
 
 const STORAGE_KEY = "citytrace.sidebarCollapsed";
 
@@ -17,10 +18,16 @@ export default function AppShell({
   children,
   searchIssues,
   recentEvents,
+  userNotifications,
+  currentUser,
+  demoAccounts,
 }: {
   children: React.ReactNode;
   searchIssues: SearchIssue[];
   recentEvents: ActivityEvent[];
+  userNotifications: UserNotification[];
+  currentUser: PublicUser | null;
+  demoAccounts: PublicUser[];
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpenPath, setMobileOpenPath] = useState<string | null>(null);
@@ -83,6 +90,7 @@ export default function AppShell({
         onToggleCollapse={toggleCollapse}
         onNavigate={closeMobile}
         onCloseMobile={closeMobile}
+        currentUser={currentUser}
       />
 
       <div
@@ -94,6 +102,9 @@ export default function AppShell({
           onOpenMobileNav={() => setMobileOpenPath(pathname)}
           searchIssues={searchIssues}
           recentEvents={recentEvents}
+          userNotifications={userNotifications}
+          currentUser={currentUser}
+          demoAccounts={demoAccounts}
         />
 
         <main

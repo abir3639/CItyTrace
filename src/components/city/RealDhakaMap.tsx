@@ -17,7 +17,6 @@ import {
 } from "@/lib/geo";
 import {
   REAL_DHAKA_CAMERA,
-  REAL_DHAKA_MARKER_COLORS,
   REAL_DHAKA_STYLE_URL,
   REAL_DHAKA_THEMES,
   applyBaseMapStyling,
@@ -25,6 +24,7 @@ import {
   getLocalNeighbourhoodLayerSpec,
   type RealDhakaTheme,
 } from "./realDhakaStyle";
+import { mapPinHex } from "@/utils/formatters";
 
 export interface RealDhakaMapProps {
   features: MapFeature[];
@@ -86,8 +86,11 @@ function buildGeoJson(features: MapFeature[]): FeatureCollectionGeoJson {
         kind: f.kind,
         state: f.state,
         label: f.label,
-        color: REAL_DHAKA_MARKER_COLORS[f.state],
-        pulse: f.kind === "issue" && (f.severity === "critical" || f.severity === "high"),
+        color: mapPinHex(f),
+        pulse:
+          Boolean(f.hasWarning) ||
+          f.pinTone === "alert" ||
+          (f.kind === "issue" && (f.severity === "critical" || f.severity === "high")),
       },
     })),
   };
@@ -303,6 +306,12 @@ export default function RealDhakaMap({
         } as unknown as LayerSpec);
       }
     };
+
+    map.on("styleimagemissing", (e) => {
+      const id = e.id;
+      if (!id || map.hasImage(id)) return;
+      map.addImage(id, { width: 1, height: 1, data: new Uint8Array([0, 0, 0, 0]) });
+    });
 
     map.on("error", (e) => {
       console.warn("Real Dhaka map error", e?.error);

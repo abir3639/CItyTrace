@@ -15,6 +15,7 @@ import {
 } from "recharts";
 import {
   AXIS_STYLE,
+  BAR_TOOLTIP_CURSOR,
   ChartBoundary,
   ChartFrame,
   DataFallback,
@@ -82,7 +83,7 @@ export function SpendComparisonChart({ data }: { data: SpendRow[] }) {
             tickFormatter={(value: number) => formatBdtCompact(value)}
           />
           <YAxis type="category" dataKey="code" tick={AXIS_STYLE} stroke={GRID_STROKE} width={72} />
-          <Tooltip contentStyle={TOOLTIP_STYLE} formatter={formatBdtValue} />
+          <Tooltip contentStyle={TOOLTIP_STYLE} cursor={BAR_TOOLTIP_CURSOR} formatter={formatBdtValue} />
           <Legend wrapperStyle={LEGEND_STYLE} />
           <Bar
             dataKey="allocated"
@@ -149,7 +150,7 @@ export function CategoryBudgetChart({ data }: { data: CategoryRow[] }) {
               />
             ))}
           </Pie>
-          <Tooltip contentStyle={TOOLTIP_STYLE} formatter={formatBdtValue} />
+          <Tooltip contentStyle={TOOLTIP_STYLE} cursor={BAR_TOOLTIP_CURSOR} formatter={formatBdtValue} />
           <Legend wrapperStyle={LEGEND_STYLE} />
         </PieChart>
       </ChartFrame>
@@ -177,7 +178,7 @@ export function ProjectStatusChart({ data }: { data: StatusRow[] }) {
           <CartesianGrid stroke={GRID_STROKE} vertical={false} />
           <XAxis dataKey="status" tick={AXIS_STYLE} stroke={GRID_STROKE} />
           <YAxis allowDecimals={false} tick={AXIS_STYLE} stroke={GRID_STROKE} />
-          <Tooltip contentStyle={TOOLTIP_STYLE} />
+          <Tooltip contentStyle={TOOLTIP_STYLE} cursor={BAR_TOOLTIP_CURSOR} />
           <Bar
             dataKey="count"
             name="Projects"
@@ -223,7 +224,7 @@ export function OverdueDaysChart({ data }: { data: OverdueRow[] }) {
           <CartesianGrid stroke={GRID_STROKE} horizontal={false} />
           <XAxis type="number" tick={AXIS_STYLE} stroke={GRID_STROKE} unit="d" />
           <YAxis type="category" dataKey="code" tick={AXIS_STYLE} stroke={GRID_STROKE} width={72} />
-          <Tooltip contentStyle={TOOLTIP_STYLE} formatter={formatDayCount} />
+          <Tooltip contentStyle={TOOLTIP_STYLE} cursor={BAR_TOOLTIP_CURSOR} formatter={formatDayCount} />
           <Bar
             dataKey="days"
             name="Days overdue"
@@ -269,7 +270,7 @@ export function ProjectSpendChart({
             stroke={GRID_STROKE}
             tickFormatter={(value: number) => formatBdtCompact(value)}
           />
-          <Tooltip contentStyle={TOOLTIP_STYLE} formatter={formatBdtValue} />
+          <Tooltip contentStyle={TOOLTIP_STYLE} cursor={BAR_TOOLTIP_CURSOR} formatter={formatBdtValue} />
           <Bar dataKey="value" name="BDT" radius={[6, 6, 0, 0]}>
             {data.map((entry) => (
               <Cell key={entry.label} fill={entry.fill} />

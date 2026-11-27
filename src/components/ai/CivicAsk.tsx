@@ -11,7 +11,6 @@ import {
   Sparkles,
 } from "lucide-react";
 import { Panel, PanelHeader } from "@/components/ui/Panel";
-import { DemoBadge } from "@/components/ui/Badge";
 import { SUGGESTED_QUESTIONS, type AskAnswer } from "@/lib/ask";
 
 export default function CivicAsk() {
@@ -62,7 +61,6 @@ export default function CivicAsk() {
         title="Ask the Civic Record"
         description="Answers are grounded strictly in the stored project and issue dataset."
         icon={<MessageSquare className="h-4 w-4" />}
-        actions={<DemoBadge label="Simulated data" />}
       />
 
       <form

@@ -13,8 +13,10 @@ import type {
   IssueStatus,
   Project,
   Sector,
+  UserRole,
 } from "@/types/citytrace";
 import { ISSUE_CATEGORIES } from "@/types/citytrace";
+import { DEPARTMENTS, getDepartmentForIssue } from "./departments";
 import { daysBetween } from "@/utils/formatters";
 
 /**
@@ -381,6 +383,8 @@ export interface ActivityEvent {
   status: IssueStatus;
   note: string;
   actor: string;
+  actorName?: string;
+  actorRole?: UserRole;
 }
 
 /** Full history across every issue, newest first. */
@@ -398,6 +402,8 @@ export function getActivityFeed(issues: Issue[] = ISSUES): ActivityEvent[] {
         status: entry.status,
         note: entry.note,
         actor: entry.actor,
+        ...(entry.actorName ? { actorName: entry.actorName } : {}),
+        ...(entry.actorRole ? { actorRole: entry.actorRole } : {}),
       });
     }
   }
@@ -529,4 +535,231 @@ export function getAuthorityScorecards(
         a.verifiedSpendSharePercent - b.verifiedSpendSharePercent ||
         b.allocatedBdt - a.allocatedBdt
     );
+}
+
+/* ------------------------------------------------------------------ */
+/* Department Operational Accountability Analytics (V2)                */
+/* ------------------------------------------------------------------ */
+
+export interface DepartmentPerformance {
+  departmentId: string;
+  code: string;
+  name: string;
+  shortName: string;
+  totalAssigned: number;
+  activeIssues: number;
+  verifiedResolutions: number;
+  /** Percentage of deadline-bearing issues currently overdue or breached. null = N/A */
+  overdueRepairRate: number | null;
+  /** Average days from official start/report to repair submission. null = N/A */
+  avgRepairDurationDays: number | null;
+  /** Average days spent in awaiting_verification. null = N/A */
+  avgVerificationDelayDays: number | null;
+  /** Percentage of resolved/submitted works completed on or before estimatedRepairDate. null = N/A */
+  onTimeCompletionRate: number | null;
+  /** Percentage of repair attempts approved on first inspection. null = N/A */
+  firstPassVerificationRate: number | null;
+  /** Percentage of resolved issues that were reopened or have pending recurrence. null = N/A */
+  recurrenceRate: number | null;
+}
+
+export function getDepartmentPerformance(
+  issues: Issue[] = ISSUES,
+  now: string = DEMO_NOW
+): DepartmentPerformance[] {
+  return DEPARTMENTS.map((dept) => {
+    const assigned = issues.filter(
+      (issue) => getDepartmentForIssue(issue).id === dept.id
+    );
+    const active = assigned.filter((issue) => issue.status !== "resolved");
+    const verifiedResolutions = assigned.filter(
+      (issue) => issue.status === "resolved" && issue.resolutionVerification === "verified"
+    ).length;
+
+    const withDeadline = assigned.filter((issue) => Boolean(issue.estimatedRepairDate));
+    const overdueCount = withDeadline.filter((issue) => {
+      if (issue.slaBreachedAt) return true;
+      if (issue.status !== "resolved" && issue.status !== "awaiting_verification") {
+        return Boolean(issue.estimatedRepairDate && issue.estimatedRepairDate < now);
+      }
+      if (issue.status === "resolved") {
+        const resDate = issue.resolvedAt ?? issue.updatedAt;
+        return Boolean(issue.estimatedRepairDate && resDate > issue.estimatedRepairDate);
+      }
+      return false;
+    }).length;
+    const overdueRepairRate =
+      withDeadline.length > 0 ? (overdueCount / withDeadline.length) * 100 : null;
+
+    // Average repair duration for submitted/resolved issues with repair attempts
+    const durations: number[] = [];
+    const verificationDelays: number[] = [];
+    let inspectedTotal = 0;
+    let firstPassApproved = 0;
+    let deadlineTrackable = 0;
+    let onTimeCount = 0;
+
+    for (const issue of assigned) {
+      const attempts = issue.repairAttempts ?? [];
+      if (attempts.length > 0) {
+        const firstSubmitted = attempts[0].submittedAt;
+        const start = issue.officialResponse?.respondedAt ?? issue.reportedAt;
+        durations.push(Math.max(1, daysBetween(start, firstSubmitted)));
+
+        if (issue.estimatedRepairDate && issue.status === "resolved") {
+          deadlineTrackable += 1;
+          const finish = issue.resolvedAt ?? issue.updatedAt;
+          if (!issue.slaBreachedAt && finish <= issue.estimatedRepairDate) {
+            onTimeCount += 1;
+          }
+        }
+      }
+
+      for (const attempt of attempts) {
+        if (attempt.verification) {
+          inspectedTotal += 1;
+          verificationDelays.push(
+            Math.max(0, daysBetween(attempt.submittedAt, attempt.verification.verifiedAt))
+          );
+          if (attempt.attemptNumber === 1 && attempt.verification.decision === "approved") {
+            firstPassApproved += 1;
+          }
+        } else if (issue.status === "awaiting_verification") {
+          verificationDelays.push(Math.max(0, daysBetween(attempt.submittedAt, now)));
+        }
+      }
+    }
+
+    const avgRepairDurationDays =
+      durations.length > 0
+        ? Math.round((durations.reduce((a, b) => a + b, 0) / durations.length) * 10) / 10
+        : null;
+
+    const avgVerificationDelayDays =
+      verificationDelays.length > 0
+        ? Math.round(
+            (verificationDelays.reduce((a, b) => a + b, 0) / verificationDelays.length) *
+              10
+          ) / 10
+        : null;
+
+    const onTimeCompletionRate =
+      deadlineTrackable > 0 ? (onTimeCount / deadlineTrackable) * 100 : null;
+
+    const firstPassVerificationRate =
+      inspectedTotal > 0 ? (firstPassApproved / inspectedTotal) * 100 : null;
+
+    const everCompletedOrReopened = assigned.filter(
+      (issue) => issue.status === "resolved" || issue.status === "reopened"
+    );
+    const recurred = everCompletedOrReopened.filter(
+      (issue) =>
+        issue.status === "reopened" ||
+        Boolean(issue.recurrenceRequests?.some((r) => r.status !== "rejected"))
+    ).length;
+    const recurrenceRate =
+      everCompletedOrReopened.length > 0
+        ? (recurred / everCompletedOrReopened.length) * 100
+        : null;
+
+    return {
+      departmentId: dept.id,
+      code: dept.code,
+      name: dept.name,
+      shortName: dept.shortName,
+      totalAssigned: assigned.length,
+      activeIssues: active.length,
+      verifiedResolutions,
+      overdueRepairRate,
+      avgRepairDurationDays,
+      avgVerificationDelayDays,
+      onTimeCompletionRate,
+      firstPassVerificationRate,
+      recurrenceRate,
+    };
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/* Project Financial-to-Civic Outcome Summary (V2)                     */
+/* ------------------------------------------------------------------ */
+
+export interface ProjectCivicOutcome {
+  linkedIssues: Issue[];
+  workOrders: string[];
+  activeRepairsCount: number;
+  overdueRepairsCount: number;
+  awaitingVerificationCount: number;
+  verifiedRepairsCount: number;
+  reopenedOrFailedCount: number;
+  repairEvidenceCount: number;
+  verifiedEvidenceCount: number;
+}
+
+export function getProjectCivicOutcome(
+  project: Project,
+  issues: Issue[] = ISSUES,
+  evidenceItems: Evidence[] = EVIDENCE,
+  now: string = DEMO_NOW
+): ProjectCivicOutcome {
+  const linkedMap = new Map<string, Issue>();
+  for (const issue of issues) {
+    if (issue.projectId === project.id || issue.locationKey === project.locationKey) {
+      linkedMap.set(issue.id, issue);
+    }
+  }
+  const linkedIssues = [...linkedMap.values()];
+  const workOrderSet = new Set<string>();
+
+  let activeRepairsCount = 0;
+  let overdueRepairsCount = 0;
+  let awaitingVerificationCount = 0;
+  let verifiedRepairsCount = 0;
+  let reopenedOrFailedCount = 0;
+
+  for (const issue of linkedIssues) {
+    if (issue.workOrderRef) workOrderSet.add(issue.workOrderRef);
+    for (const attempt of issue.repairAttempts ?? []) {
+      if (attempt.workOrderRef) workOrderSet.add(attempt.workOrderRef);
+    }
+
+    if (issue.status === "in_progress") activeRepairsCount += 1;
+    if (issue.status === "awaiting_verification") awaitingVerificationCount += 1;
+    if (issue.status === "resolved" && issue.resolutionVerification === "verified") {
+      verifiedRepairsCount += 1;
+    }
+    if (
+      issue.status === "reopened" ||
+      Boolean(issue.repairAttempts?.some((a) => a.verification?.decision === "rejected"))
+    ) {
+      reopenedOrFailedCount += 1;
+    }
+    if (
+      issue.status !== "resolved" &&
+      issue.status !== "awaiting_verification" &&
+      (Boolean(issue.slaBreachedAt) ||
+        Boolean(issue.estimatedRepairDate && issue.estimatedRepairDate < now))
+    ) {
+      overdueRepairsCount += 1;
+    }
+  }
+
+  const relatedEvidenceIds = new Set<string>(project.evidenceIds);
+  for (const issue of linkedIssues) {
+    for (const eid of issue.evidenceIds) relatedEvidenceIds.add(eid);
+  }
+  const projectEvidence = evidenceItems.filter((ev) => relatedEvidenceIds.has(ev.id));
+  const verifiedEvidenceCount = projectEvidence.filter((ev) => ev.verified).length;
+
+  return {
+    linkedIssues,
+    workOrders: [...workOrderSet],
+    activeRepairsCount,
+    overdueRepairsCount,
+    awaitingVerificationCount,
+    verifiedRepairsCount,
+    reopenedOrFailedCount,
+    repairEvidenceCount: projectEvidence.length,
+    verifiedEvidenceCount,
+  };
 }

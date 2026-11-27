@@ -1,0 +1,59 @@
+import { NextResponse } from "next/server";
+import { SECTORS } from "@/data";
+import {
+  SESSION_COOKIE,
+  cookieOptionsForRequest,
+  createSession,
+  registerUser,
+} from "@/lib/auth-store";
+import type { UserRole } from "@/types/citytrace";
+
+const VALID_ROLES: readonly UserRole[] = ["citizen", "verifier", "official"];
+
+interface RegisterBody {
+  name?: unknown;
+  email?: unknown;
+  password?: unknown;
+  role?: unknown;
+  sectorId?: unknown;
+  departmentId?: unknown;
+}
+
+export async function POST(request: Request) {
+  let body: RegisterBody;
+  try {
+    body = (await request.json()) as RegisterBody;
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON request body." }, { status: 400 });
+  }
+
+  const name = typeof body.name === "string" ? body.name : "";
+  const email = typeof body.email === "string" ? body.email : "";
+  const password = typeof body.password === "string" ? body.password : "";
+  const role: UserRole =
+    typeof body.role === "string" && VALID_ROLES.includes(body.role as UserRole)
+      ? (body.role as UserRole)
+      : "citizen";
+  const sectorId =
+    typeof body.sectorId === "string" && SECTORS.some((s) => s.id === body.sectorId)
+      ? body.sectorId
+      : SECTORS[0].id;
+  const departmentId =
+    typeof body.departmentId === "string" ? body.departmentId : undefined;
+
+  const result = registerUser({ name, email, password, role, sectorId, departmentId });
+  if (!result.ok) {
+    return NextResponse.json(
+      {
+        error: result.error,
+        ...(result.field ? { fields: { [result.field]: result.error } } : {}),
+      },
+      { status: result.status }
+    );
+  }
+
+  const token = createSession(result.user.id);
+  const response = NextResponse.json({ user: result.user }, { status: 201 });
+  response.cookies.set(SESSION_COOKIE, token, cookieOptionsForRequest(request));
+  return response;
+}

@@ -17,6 +17,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Panel, PanelHeader } from "@/components/ui/Panel";
 import { Badge } from "@/components/ui/Badge";
 import { KeyValue, ProgressBar, SpendBar, StatCard } from "@/components/ui/Data";
+import RoleActionCentre from "@/components/governance/RoleActionCentre";
 import {
   CategoryPerformanceChart,
   IssueTrendChart,
@@ -26,6 +27,8 @@ import {
 import FindingsFeed from "@/components/ai/FindingsFeed";
 import { PROJECTS, SECTORS } from "@/data";
 import { findAnomalies } from "@/lib/anomalies";
+import { getCurrentUser, isDemoModeEnabled } from "@/lib/auth-store";
+import { getUserWatchlist } from "@/lib/governance-store";
 import {
   PERIOD_OPTIONS,
   applyIssueAttributes,
@@ -130,6 +133,13 @@ export default async function OverviewPage({
   const hasFilters = period !== "all" || Boolean(sectorId) || Boolean(category);
 
   const allIssues = listIssues();
+  const allEvidence = listAllEvidence();
+  const currentUser = await getCurrentUser();
+  const watchlist = currentUser
+    ? getUserWatchlist(currentUser.id)
+    : { issues: [], sectors: [], projects: [] };
+  const demoEnabled = isDemoModeEnabled();
+
   const scopedIssues = applyIssueAttributes(allIssues, { sectorId, category });
   const windowedIssues = applyIssuePeriod(scopedIssues, period);
   const scopedProjects = applyProjectAttributes(PROJECTS, { sectorId, category });
@@ -143,12 +153,12 @@ export default async function OverviewPage({
   ).length;
 
   const budgets = getBudgetTotals(scopedProjects);
-  const evidence = getEvidenceCoverage(scopedIssues, listAllEvidence());
+  const evidence = getEvidenceCoverage(scopedIssues, allEvidence);
   const categories = getCategoryStats(scopedIssues);
   const sectors = getSectorStats(scopedIssues);
   const trend = buildTrend(windowedIssues, periodStart(period));
   const activity = getActivityFeed(windowedIssues).slice(0, 6);
-  const findings = findAnomalies(scopedIssues);
+  const findings = findAnomalies(scopedIssues, allEvidence);
 
   const unspent = Math.max(0, budgets.allocatedBdt - budgets.reportedBdt);
   const spendSplit = [
@@ -195,6 +205,15 @@ export default async function OverviewPage({
         }
       />
 
+      {/* Role-Specific Governance Action Centre */}
+      <RoleActionCentre
+        user={currentUser}
+        issues={allIssues}
+        evidence={allEvidence}
+        watchlist={watchlist}
+        demoEnabled={demoEnabled}
+      />
+
       {/* Flagship Walkthrough */}
       <Panel glow className="p-5">
         <div className="flex flex-wrap items-center justify-between gap-2 pb-3">
@@ -238,14 +257,16 @@ export default async function OverviewPage({
             <Link
               key={item.step}
               href={item.href}
-              className="group flex items-center justify-between gap-3 rounded-[14px] bg-[#F5F5F7] px-3.5 py-3 transition-all hover:bg-[#EBEEF3] active:scale-[0.99]"
+              className="group flex items-center justify-between gap-3 rounded-[14px] border border-black/[0.06] bg-[#F9FAFB] px-3.5 py-3 transition-all duration-200 hover:-translate-y-[1px] hover:border-[#007AFF]/25 hover:bg-white hover:shadow-[0_6px_18px_-8px_rgba(15,23,42,0.14)] active:scale-[0.99]"
             >
               <div className="min-w-0">
-                <p className="text-[12.5px] font-semibold text-[#1D1D1F]">
-                  <span className="mr-1.5 text-[#007AFF] tabular-nums">{item.step}</span>
-                  {item.label}
+                <p className="flex items-center gap-2 text-[12.5px] font-semibold text-[#1D1D1F]">
+                  <span className="inline-flex h-5 w-6 shrink-0 items-center justify-center rounded-md bg-[#007AFF]/[0.10] text-[11px] font-semibold text-[#0055CC] transition-colors group-hover:bg-[#007AFF] group-hover:text-white tabular-nums">
+                    {item.step}
+                  </span>
+                  <span className="truncate">{item.label}</span>
                 </p>
-                <p className="mt-0.5 truncate text-[12px] text-[#6E6E73]">{item.sub}</p>
+                <p className="mt-1 truncate text-[12px] text-[#6E6E73]">{item.sub}</p>
               </div>
               <ArrowRight className="h-3.5 w-3.5 shrink-0 text-[#86868B] transition-transform group-hover:translate-x-0.5 group-hover:text-[#007AFF]" />
             </Link>
@@ -705,6 +726,11 @@ export default async function OverviewPage({
                       </Link>
                       <span className="text-[#6E6E73] tabular-nums">{formatDate(event.at)}</span>
                       <Badge tone={tone}>{ISSUE_STATUS_LABELS[event.status]}</Badge>
+                      {event.actorName ? (
+                        <span className="text-[11.5px] font-medium text-[#6E6E73]">
+                          by {event.actorName}
+                        </span>
+                      ) : null}
                     </div>
                     <p className="mt-1 line-clamp-2 text-[13px] leading-relaxed text-[#48484A]">
                       {event.note}

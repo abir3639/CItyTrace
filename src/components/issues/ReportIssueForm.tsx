@@ -3,13 +3,27 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { AlertCircle, Camera, CheckCircle2, Loader2, MapPin, Send, X } from "lucide-react";
+import {
+  AlertCircle,
+  Camera,
+  CheckCircle2,
+  Loader2,
+  LogIn,
+  MapPin,
+  Send,
+  UserPlus,
+  X,
+} from "lucide-react";
 import { SECTORS } from "@/data";
+import { canUserPerform } from "@/lib/permissions";
+import { RolePill, UserAvatar } from "@/components/ui/UserAvatar";
+import PermissionLockBanner from "@/components/governance/PermissionLockBanner";
 import {
   CATEGORY_LABELS,
   ISSUE_CATEGORIES,
   type IssueCategory,
   type MapPosition,
+  type PublicUser,
 } from "@/types/citytrace";
 
 const MAX_FILE_BYTES = 1_500_000;
@@ -59,10 +73,12 @@ export default function ReportIssueForm({
   initialSectorId,
   initialLocation,
   initialCoordinates,
+  currentUser = null,
 }: {
   initialSectorId?: string;
   initialLocation?: string;
   initialCoordinates?: MapPosition;
+  currentUser?: PublicUser | null;
 } = {}) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -154,8 +170,74 @@ export default function ReportIssueForm({
   const fieldClasses =
     "w-full rounded-[12px] border border-black/[0.08] bg-[#F5F5F7] px-3.5 py-2.5 text-[13.5px] text-[#1D1D1F] placeholder:text-[#86868B] transition-colors focus:border-[#007AFF] focus:bg-white focus:outline-none";
 
+  if (!currentUser) {
+    return (
+      <div className="flex flex-col items-start gap-5 py-2">
+        <div className="flex items-start gap-3.5">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#007AFF]/[0.1] text-[#007AFF]">
+            <LogIn className="h-5 w-5" />
+          </span>
+          <div>
+            <h2 className="text-[17px] font-semibold tracking-[-0.015em] text-[#1D1D1F]">
+              Sign in to file an attributed civic report
+            </h2>
+            <p className="mt-1 max-w-xl text-[13.5px] leading-relaxed text-[#6E6E73]">
+              CityTrace links every street complaint to a named resident, verifier, or
+              municipal profile so neighbours and investigators can see who reported the hazard.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2.5">
+          <Link
+            href="/login?next=/civic-issues/report"
+            className="inline-flex items-center gap-1.5 rounded-full bg-[#007AFF] px-5 py-2.5 text-[13.5px] font-semibold text-white shadow-[0_4px_14px_-4px_rgba(0,122,255,0.45)] transition-all hover:bg-[#0066D6]"
+          >
+            <LogIn className="h-4 w-4" />
+            Sign in to report
+          </Link>
+          <Link
+            href="/register?next=/civic-issues/report"
+            className="inline-flex items-center gap-1.5 rounded-full border border-black/[0.08] bg-white px-5 py-2.5 text-[13.5px] font-semibold text-[#1D1D1F] shadow-xs transition-colors hover:bg-[#F5F5F7]"
+          >
+            <UserPlus className="h-4 w-4 text-[#007AFF]" />
+            Create account
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  const reportPerm = canUserPerform(currentUser, "report_issue");
+  if (!reportPerm.allowed) {
+    return (
+      <PermissionLockBanner
+        title="Citizen or Verifier Role Required"
+        reason={reportPerm.reason ?? "Official accounts cannot submit resident complaints."}
+        requiredRole="citizen"
+      />
+    );
+  }
+
   return (
     <form onSubmit={submit} className="flex flex-col gap-5">
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-[14px] border border-black/[0.06] bg-[#F5F5F7] px-3.5 py-2.5">
+        <div className="flex items-center gap-2.5">
+          <UserAvatar
+            initials={currentUser.initials}
+            color={currentUser.avatarColor}
+            size="sm"
+          />
+          <div className="flex flex-wrap items-center gap-2 text-[12.5px]">
+            <span className="text-[#6E6E73]">Filing publicly as</span>
+            <span className="font-semibold text-[#1D1D1F]">{currentUser.name}</span>
+            <RolePill role={currentUser.role} />
+          </div>
+        </div>
+        <Link href="/profile" className="text-[12px] font-medium text-[#007AFF] hover:underline">
+          View profile
+        </Link>
+      </div>
       {pinnedCoordinates ? (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-[14px] border border-[#007AFF]/20 bg-[#007AFF]/[0.07] px-3.5 py-2.5">
           <span className="inline-flex items-center gap-2 text-[12.5px] font-medium text-[#0055CC] tabular-nums">

@@ -17,13 +17,21 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Panel, PanelHeader } from "@/components/ui/Panel";
 import { Badge } from "@/components/ui/Badge";
 import { KeyValue, ProgressBar, SpendBar } from "@/components/ui/Data";
-import { EvidenceGallery } from "@/components/evidence/EvidenceTile";
+import EvidenceGalleryClient from "@/components/evidence/EvidenceGalleryClient";
 import EvidenceCompareSlider from "@/components/evidence/EvidenceCompareSlider";
-import { PrintDossierButton } from "@/components/ui/ExportActions";
+import FollowButton from "@/components/governance/FollowButton";
+import { CopyLinkButton, PrintDossierButton } from "@/components/ui/ExportActions";
 import { ProjectSpendChart } from "@/components/money/MoneyCharts";
-import { getEvidence, getSector, projectsById } from "@/data";
-import { listIssues } from "@/lib/issue-store";
-import { getBudgetFor, getMilestoneTotals, getProjectOverdueDays } from "@/lib/stats";
+import { getSector, projectsById } from "@/data";
+import { getCurrentUser } from "@/lib/auth-store";
+import { getUserWatchlist } from "@/lib/governance-store";
+import { listAllEvidence, listIssues } from "@/lib/issue-store";
+import {
+  getBudgetFor,
+  getMilestoneTotals,
+  getProjectCivicOutcome,
+  getProjectOverdueDays,
+} from "@/lib/stats";
 import { ISSUE_STATUS_LABELS, PROJECT_STATUS_LABELS } from "@/types/citytrace";
 import {
   TONES,
@@ -69,12 +77,24 @@ export default async function ProjectDetailPage({
   const project = projectsById.get(id);
   if (!project) notFound();
 
+  const currentUser = await getCurrentUser();
+  const watchlist = currentUser
+    ? getUserWatchlist(currentUser.id)
+    : { issues: [], sectors: [], projects: [] };
+  const isFollowing = watchlist.projects.includes(project.id);
+
   const sector = getSector(project.sectorId);
-  const evidence = getEvidence(project.evidenceIds);
+  const allIssues = listIssues();
+  const allEvidence = listAllEvidence();
+  const evidenceMap = new Map(allEvidence.map((item) => [item.id, item]));
+  const evidence = project.evidenceIds
+    .map((eid) => evidenceMap.get(eid))
+    .filter((item): item is NonNullable<typeof item> => item !== undefined);
   const budget = getBudgetFor(project);
   const milestones = getMilestoneTotals(project);
   const overdue = getProjectOverdueDays(project);
-  const linkedIssues = listIssues().filter((issue) => issue.projectId === project.id);
+  const outcome = getProjectCivicOutcome(project, allIssues, allEvidence);
+  const linkedIssues = outcome.linkedIssues;
   const statusTone = projectStatusTone(project.status);
 
   return (
@@ -88,6 +108,14 @@ export default async function ProjectDetailPage({
           Public Projects
         </Link>
         <div className="print-hidden flex flex-wrap items-center gap-2">
+          <FollowButton
+            entityType="project"
+            entityId={project.id}
+            initialFollowing={isFollowing}
+            signedIn={Boolean(currentUser)}
+            loginNext={`/public-projects/${project.id}`}
+          />
+          <CopyLinkButton />
           <PrintDossierButton />
           <Link
             href={`/city-explorer?feature=project:${project.id}`}
@@ -198,6 +226,83 @@ export default async function ProjectDetailPage({
 
           <Panel className="p-5">
             <PanelHeader
+              title="Civic Outcome & Accountability Chain"
+              description="Distinguishes financial disbursement from independently verified street outcomes."
+              icon={<Wrench className="h-4 w-4" />}
+            />
+
+            <div className="mt-4 flex flex-wrap items-center gap-2 text-[11.5px] font-medium">
+              <span className="rounded-full bg-[#007AFF]/[0.1] px-2.5 py-1 font-semibold text-[#0055CC]">
+                1. {project.code} ({formatPercent(budget.reportedPercent, 0)} spent)
+              </span>
+              <span className="text-[#86868B]">→</span>
+              <span className="rounded-full bg-[#F5F5F7] px-2.5 py-1 text-[#1D1D1F] tabular-nums">
+                2. Work Orders ({outcome.workOrders.length})
+              </span>
+              <span className="text-[#86868B]">→</span>
+              <span className="rounded-full bg-[#F5F5F7] px-2.5 py-1 text-[#1D1D1F] tabular-nums">
+                3. Civic Issues ({outcome.linkedIssues.length})
+              </span>
+              <span className="text-[#86868B]">→</span>
+              <span className="rounded-full bg-[#F5F5F7] px-2.5 py-1 text-[#1D1D1F] tabular-nums">
+                4. Evidence ({outcome.verifiedEvidenceCount}/{outcome.repairEvidenceCount} verified)
+              </span>
+              <span className="text-[#86868B]">→</span>
+              <span className="rounded-full bg-[#34C759]/[0.12] px-2.5 py-1 font-semibold text-[#1A7F37] tabular-nums">
+                5. Verified Outcomes ({outcome.verifiedRepairsCount})
+              </span>
+            </div>
+
+            <dl className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-5">
+              <div className="ct-surface-inset rounded-[12px] px-3 py-2">
+                <dt className="text-[11px] text-[#6E6E73]">Active repairs</dt>
+                <dd className="mt-0.5 text-[16px] font-semibold text-[#0055CC] tabular-nums">
+                  {outcome.activeRepairsCount}
+                </dd>
+              </div>
+              <div className="ct-surface-inset rounded-[12px] px-3 py-2">
+                <dt className="text-[11px] text-[#6E6E73]">Overdue</dt>
+                <dd className="mt-0.5 text-[16px] font-semibold text-[#C9241B] tabular-nums">
+                  {outcome.overdueRepairsCount}
+                </dd>
+              </div>
+              <div className="ct-surface-inset rounded-[12px] px-3 py-2">
+                <dt className="text-[11px] text-[#6E6E73]">Awaiting verify</dt>
+                <dd className="mt-0.5 text-[16px] font-semibold text-[#B25000] tabular-nums">
+                  {outcome.awaitingVerificationCount}
+                </dd>
+              </div>
+              <div className="ct-surface-inset rounded-[12px] px-3 py-2">
+                <dt className="text-[11px] text-[#6E6E73]">Verified fixes</dt>
+                <dd className="mt-0.5 text-[16px] font-semibold text-[#1A7F37] tabular-nums">
+                  {outcome.verifiedRepairsCount}
+                </dd>
+              </div>
+              <div className="ct-surface-inset rounded-[12px] px-3 py-2">
+                <dt className="text-[11px] text-[#6E6E73]">Reopened / failed</dt>
+                <dd className="mt-0.5 text-[16px] font-semibold text-[#C9241B] tabular-nums">
+                  {outcome.reopenedOrFailedCount}
+                </dd>
+              </div>
+            </dl>
+
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-[12px]">
+              <span className="text-[#6E6E73]">
+                {outcome.workOrders.length > 0
+                  ? `Work orders: ${outcome.workOrders.join(", ")}`
+                  : "No digital work-order ref linked yet"}
+              </span>
+              <Link
+                href={`/ai-investigation?project=${project.id}`}
+                className="font-semibold text-[#007AFF] hover:underline"
+              >
+                Inspect linked findings →
+              </Link>
+            </div>
+          </Panel>
+
+          <Panel className="p-5">
+            <PanelHeader
               title="Milestone Schedule"
               description={`${milestones.met} met · ${milestones.missed} missed · ${milestones.inProgress} in progress · ${milestones.pending} pending`}
               icon={<CalendarClock className="h-4 w-4" />}
@@ -265,7 +370,7 @@ export default async function ProjectDetailPage({
             />
             <div className="mt-3 flex flex-col gap-4">
               {evidence.length >= 2 ? <EvidenceCompareSlider items={evidence} /> : null}
-              <EvidenceGallery items={evidence} />
+              <EvidenceGalleryClient items={evidence} currentUser={currentUser} />
             </div>
           </Panel>
 

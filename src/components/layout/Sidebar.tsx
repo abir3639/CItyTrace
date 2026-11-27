@@ -3,9 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { LogIn, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { NAV_ITEMS } from "@/lib/navigation";
 import { DemoBadge } from "@/components/ui/Badge";
+import { UserAvatar } from "@/components/ui/UserAvatar";
+import { USER_ROLE_LABELS, type PublicUser } from "@/types/citytrace";
 
 interface SidebarProps {
   collapsed: boolean;
@@ -13,6 +15,7 @@ interface SidebarProps {
   onToggleCollapse: () => void;
   onNavigate: () => void;
   onCloseMobile: () => void;
+  currentUser: PublicUser | null;
 }
 
 function BrandMark() {
@@ -37,6 +40,7 @@ export default function Sidebar({
   onToggleCollapse,
   onNavigate,
   onCloseMobile,
+  currentUser,
 }: SidebarProps) {
   const pathname = usePathname();
   const [hovered, setHovered] = useState(false);
@@ -209,26 +213,55 @@ export default function Sidebar({
           </div>
         </div>
 
-        <div
-          className="flex items-center gap-2.5 overflow-hidden rounded-xl border border-white/65 bg-white/45 py-2 pl-[12px] pr-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.8),0_1px_4px_rgba(15,23,42,0.04)]"
-          title="Demo Citizen · Read-only demonstration session"
-        >
-          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#1D1D1F] text-[11px] font-semibold text-white">
-            DC
-          </span>
-          <div
-            className={`min-w-0 flex-1 whitespace-nowrap leading-tight transition-opacity duration-200 motion-reduce:transition-none ${
-              isVisuallyCollapsed ? "lg:opacity-0" : "opacity-100"
-            }`}
+        {currentUser ? (
+          <Link
+            href="/profile"
+            onClick={onNavigate}
+            className="flex items-center gap-2.5 overflow-hidden rounded-xl border border-white/65 bg-white/55 py-2 pl-[12px] pr-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.85),0_1px_4px_rgba(15,23,42,0.05)] transition-colors hover:bg-white/80"
+            title={`${currentUser.name} · ${USER_ROLE_LABELS[currentUser.role]}`}
           >
-            <p className="truncate text-[12.5px] font-medium text-[#1D1D1F]">
-              Demo Citizen
-            </p>
-            <p className="truncate text-[11px] text-[#525257]">
-              Read-only session
-            </p>
-          </div>
-        </div>
+            <UserAvatar
+              initials={currentUser.initials}
+              color={currentUser.avatarColor}
+              size="sm"
+            />
+            <div
+              className={`min-w-0 flex-1 whitespace-nowrap leading-tight transition-opacity duration-200 motion-reduce:transition-none ${
+                isVisuallyCollapsed ? "lg:opacity-0" : "opacity-100"
+              }`}
+            >
+              <p className="truncate text-[12.5px] font-semibold text-[#1D1D1F]">
+                {currentUser.name}
+              </p>
+              <p className="truncate text-[11px] text-[#525257]">
+                {USER_ROLE_LABELS[currentUser.role]}
+              </p>
+            </div>
+          </Link>
+        ) : (
+          <Link
+            href="/login"
+            onClick={onNavigate}
+            className="flex items-center gap-2.5 overflow-hidden rounded-xl border border-white/65 bg-white/50 py-2 pl-[12px] pr-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.8),0_1px_4px_rgba(15,23,42,0.04)] transition-colors hover:bg-white/80"
+            title="Sign in or register to track reports and votes"
+          >
+            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#007AFF]/[0.12] text-[#007AFF]">
+              <LogIn className="h-3.5 w-3.5" />
+            </span>
+            <div
+              className={`min-w-0 flex-1 whitespace-nowrap leading-tight transition-opacity duration-200 motion-reduce:transition-none ${
+                isVisuallyCollapsed ? "lg:opacity-0" : "opacity-100"
+              }`}
+            >
+              <p className="truncate text-[12.5px] font-semibold text-[#1D1D1F]">
+                Sign in / Register
+              </p>
+              <p className="truncate text-[11px] text-[#525257]">
+                Track reports &amp; votes
+              </p>
+            </div>
+          </Link>
+        )}
 
         <button
           type="button"

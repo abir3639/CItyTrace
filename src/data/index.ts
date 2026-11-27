@@ -1,10 +1,14 @@
 import type {
+  AccountabilityPinTone,
   Evidence,
   Issue,
   MapFeature,
   Project,
   Sector,
+  SlaState,
 } from "@/types/citytrace";
+import { getDepartmentForIssue } from "@/lib/departments";
+import { deriveIssueSla } from "@/lib/sla";
 import { EVIDENCE } from "./evidence";
 import { ISSUES } from "./issues";
 import { PROJECTS } from "./projects";
@@ -116,27 +120,116 @@ export function isIssueOpen(issue: Issue): boolean {
 /* Derived 3D map features                                             */
 /* ------------------------------------------------------------------ */
 
+export function deriveIssuePinMetadata(
+  issue: Issue,
+  evidenceMap: Map<string, Evidence>
+): {
+  state: MapFeature["state"];
+  pinTone: AccountabilityPinTone;
+  slaState: SlaState;
+  hasWarning: boolean;
+  departmentId: string;
+} {
+  const sla = deriveIssueSla(issue);
+  const hasFlaggedEvidence = issue.evidenceIds.some(
+    (id) => evidenceMap.get(id)?.status === "flagged"
+  );
+  const departmentId = issue.departmentId ?? getDepartmentForIssue(issue).id;
+
+  if (issue.status === "resolved") {
+    return {
+      state: "completed",
+      pinTone: "verified_resolved",
+      slaState: sla.state,
+      hasWarning: hasFlaggedEvidence,
+      departmentId,
+    };
+  }
+
+  const hasWarning =
+    issue.status === "reopened" || sla.state === "overdue" || hasFlaggedEvidence;
+
+  if (hasWarning) {
+    return {
+      state: "unresolved",
+      pinTone: "alert",
+      slaState: sla.state,
+      hasWarning: true,
+      departmentId,
+    };
+  }
+
+  switch (issue.status) {
+    case "awaiting_verification":
+      return {
+        state: "delayed",
+        pinTone: "awaiting_verification",
+        slaState: sla.state,
+        hasWarning: false,
+        departmentId,
+      };
+    case "in_progress":
+      return {
+        state: "active",
+        pinTone: "in_progress",
+        slaState: sla.state,
+        hasWarning: false,
+        departmentId,
+      };
+    case "under_review":
+      return {
+        state: "unresolved",
+        pinTone: "under_review",
+        slaState: sla.state,
+        hasWarning: false,
+        departmentId,
+      };
+    case "reported":
+    default:
+      return {
+        state: "unresolved",
+        pinTone: "reported",
+        slaState: sla.state,
+        hasWarning: false,
+        departmentId,
+      };
+  }
+}
+
 /**
- * Builds the clickable beacons for the 3D city explorer.
- *
- * Resolved issues are intentionally excluded: the map shows the city's current
- * condition, while the permanent history lives in the Civic Issues module.
+ * Builds the clickable beacons for the 3D city explorer using the Civic
+ * Accountability V2 6-colour scheme (reported, under_review, in_progress,
+ * awaiting_verification, overdue/reopened alert, and independently verified fixed).
  */
-export function toMapFeatures(issues: Issue[] = ISSUES): MapFeature[] {
+export function toMapFeatures(
+  issues: Issue[] = ISSUES,
+  evidenceList: Evidence[] = EVIDENCE
+): MapFeature[] {
   const features: MapFeature[] = [];
+  const localEvidenceMap = new Map(evidenceList.map((e) => [e.id, e]));
 
   for (const issue of issues) {
-    if (!isIssueOpen(issue)) continue;
+    // Include active/open accountability issues plus independently verified fixed issues.
+    const includeResolved =
+      issue.status === "resolved" && issue.resolutionVerification === "verified";
+    if (!isIssueOpen(issue) && !includeResolved) continue;
+
+    const meta = deriveIssuePinMetadata(issue, localEvidenceMap);
     features.push({
       id: `issue:${issue.id}`,
       refId: issue.id,
       kind: "issue",
-      state: "unresolved",
+      state: meta.state,
       label: issue.code,
       sublabel: issue.title,
       coordinates: issue.coordinates,
       sectorId: issue.sectorId,
       severity: issue.severity,
+      pinTone: meta.pinTone,
+      issueStatus: issue.status,
+      slaState: meta.slaState,
+      hasWarning: meta.hasWarning,
+      departmentId: meta.departmentId,
     });
   }
 

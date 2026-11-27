@@ -6,7 +6,7 @@ interface PageHeaderProps {
   title: string;
   description: string;
   actions?: ReactNode;
-  /** Show the subtle simulated-data disclosure. Defaults to true. */
+  /** Show the subtle simulated-data disclosure. Defaults to false. */
   showDemoBadge?: boolean;
 }
 
@@ -16,7 +16,7 @@ export function PageHeader({
   title,
   description,
   actions,
-  showDemoBadge = true,
+  showDemoBadge = false,
 }: PageHeaderProps) {
   return (
     <div className="flex flex-wrap items-end justify-between gap-4 pb-1">
